@@ -16,9 +16,9 @@ def load_nlp_tools():
     # Download stopwords jika belum ada
     nltk.download('stopwords', quiet=True)
     
-    # Load language tools
-    tool_id = language_tool_python.LanguageTool('id-ID')
-    tool_en = language_tool_python.LanguageTool('en-US')
+    # Load language tools menggunakan PUBLIC API agar tidak butuh Java di server
+    tool_id = language_tool_python.LanguageToolPublicAPI('id-ID')
+    tool_en = language_tool_python.LanguageToolPublicAPI('en-US')
     
     # Siapkan stopwords gabungan (Inggris & Indonesia)
     stop_words_en = set(stopwords.words('english'))
