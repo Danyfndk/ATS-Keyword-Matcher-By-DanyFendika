@@ -9,15 +9,7 @@ from fpdf import FPDF
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="CV Auditor & ATS Readiness", page_icon="📑", layout="wide")
 
-# --- UI CLEANUP (CSS INJECTION) ---
-st.markdown("""
-    <style>
-        /* Menyembunyikan teks bawaan '200MB per file' dari Streamlit agar tidak kontradiktif */
-        [data-testid="stFileUploadDropzone"] small {
-            display: none !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# (Catatan: Kode CSS penyembunyi teks 200MB telah dihapus agar UI tampil natural sesuai standar)
 
 # --- INISIALISASI DATA NLP ---
 @st.cache_resource
@@ -337,13 +329,15 @@ st.title("💼 CV Auditor & ATS Readiness")
 st.markdown("Evaluasi anatomi dokumen CV Anda berdasarkan standar global **Human Capital** dan **Mesin ATS**.")
 
 with st.container(border=True):
-    uploaded_file = st.file_uploader("Upload Dokumen CV (Hanya format PDF - Maksimal 1MB)", type=["pdf"])
+    # Teks UI diubah kembali agar sesuai dengan standar bawaan Streamlit
+    uploaded_file = st.file_uploader("Upload Dokumen CV (Hanya format PDF)", type=["pdf"])
 
 if uploaded_file:
-    MAX_FILE_SIZE = 1 * 1024 * 1024 
+    # --- COMMERCIAL UPDATE: Kembalikan Batas ke 200MB ---
+    MAX_FILE_SIZE = 200 * 1024 * 1024 # 200 MB
     
     if uploaded_file.size > MAX_FILE_SIZE:
-        st.error("⚠️ Ukuran file terlalu besar! Batas maksimal ukuran dokumen CV adalah 1MB.")
+        st.error("⚠️ Ukuran file terlalu besar! Batas maksimal ukuran dokumen CV adalah 200MB.")
     else:
         with st.spinner("Mesin sedang mengekstrak dan mengaudit dokumen..."):
             try:
