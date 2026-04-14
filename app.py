@@ -9,8 +9,6 @@ from fpdf import FPDF
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="CV Auditor & ATS Readiness", page_icon="📑", layout="wide")
 
-# (Catatan: Kode CSS penyembunyi teks 200MB telah dihapus agar UI tampil natural sesuai standar)
-
 # --- INISIALISASI DATA NLP ---
 @st.cache_resource
 def setup_nlp():
@@ -207,6 +205,11 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.cell(145, 7, ' POOR: Risiko tinggi auto-reject. Format rusak atau minim data.', border=1, ln=1)
     pdf.ln(8)
     
+    # --- SMART PAGE BREAK CHECK ---
+    # Jika sisa halaman di bawah 80mm, lompat ke halaman baru agar rapi
+    if pdf.get_y() > 200: 
+        pdf.add_page()
+
     # --- 3. DETAILED METRICS ---
     pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
@@ -217,52 +220,61 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.set_font('Arial', '', 9.5)
     pdf.set_text_color(60, 60, 60)
     intro_text = (
-        "Empat metrik di bawah ini dievaluasi berdasarkan standar rekrutmen global dan cara kerja algoritma "
-        "Applicant Tracking System (ATS). Sistem memvalidasi integritas format, kekuatan narasi pencapaian, "
-        "serta kuantifikasi data untuk memastikan CV Anda siap bersaing secara profesional."
+        "Lima metrik di bawah ini dievaluasi berdasarkan standar rekrutmen global dan algoritma Applicant "
+        "Tracking System (ATS). Sistem memvalidasi integritas format, narasi, dan kuantifikasi data Anda."
     )
     pdf.multi_cell(180, 5, intro_text)
     pdf.ln(5)
 
+    # A. Parsability
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"A. ATS Parsability (Text Readability) : {report_data['parsability_score']}%", 0, 1)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(127, 140, 141)
-    pdf.multi_cell(180, 4.5, "Note: Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari desain 2 kolom atau penggunaan tabel.")
-    pdf.ln(4)
+    pdf.multi_cell(180, 4.5, "Note: Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari tabel/2 kolom.")
+    pdf.ln(3)
 
+    # B. XYZ Score
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"B. Kualitas Kalimat (Google XYZ Score) : {int(report_data['xyz_score'])}%", 0, 1)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(127, 140, 141)
-    xyz_note = (
-        "Note: Standar XYZ memadukan [Action Verb] + [Konteks] + [Metrik]. Sistem memberikan Poin Parsial (50%) "
-        "jika kalimat Anda memiliki Action Verb namun tanpa angka. Skor 0% terjadi jika kalimat naratif pasif murni."
-    )
-    pdf.multi_cell(180, 4.5, xyz_note)
-    pdf.ln(4)
+    pdf.multi_cell(180, 4.5, "Note: Standar XYZ memadukan [Action Verb] + [Konteks] + [Metrik]. Skor 0% terjadi jika kalimat naratif pasif murni.")
+    pdf.ln(3)
 
+    # C. Metrics
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"C. Quantifiable Metrics: {report_data['metrics_count']} Data Points Found", 0, 1)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(127, 140, 141)
-    metric_note = (
-        "Note: Jumlah metrik (angka/persentase) di CV Anda sebagai bukti pencapaian kerja yang nyata. "
-        "Contoh metrik yang ideal: 'Memimpin 15 staf', 'Meningkatkan efisiensi 20%', atau 'Mengelola budget Rp500 juta'."
-    )
-    pdf.multi_cell(180, 4.5, metric_note)
-    pdf.ln(4)
+    pdf.multi_cell(180, 4.5, "Note: Bukti pencapaian nyata. Contoh ideal: 'Memimpin 15 staf', 'Efisiensi 20%', atau 'Budget Rp500 juta'.")
+    pdf.ln(3)
 
+    # D. Tenure (DIKEMBALIKAN KE PDF)
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 5, f"D. Document Format: {report_data['pages']} Pages", 0, 1)
+    pdf.cell(180, 5, f"D. Est. Career Tenure: {report_data['total_tenure']} Years", 0, 1)
+    pdf.set_font('Arial', 'I', 9)
+    pdf.set_text_color(127, 140, 141)
+    pdf.multi_cell(180, 4.5, "Note: Masa kerja yang berhasil dikalkulasi otomatis oleh mesin dari format riwayat kerja Anda.")
+    pdf.ln(3)
+
+    # E. Pages
+    pdf.set_font('Arial', 'B', 10)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(180, 5, f"E. Document Format: {report_data['pages']} Pages", 0, 1)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(127, 140, 141)
     pdf.multi_cell(180, 4.5, "Note: Standar panjang dokumen resume profesional global adalah 1 hingga maksimal 2 halaman.")
     pdf.ln(6)
+
+    # --- SMART PAGE BREAK CHECK ---
+    # Memastikan bagian Diagnostic Result tidak terpotong canggung (Orphan text)
+    if pdf.get_y() > 215: 
+        pdf.add_page()
 
     # --- 4. DIAGNOSTIC RESULTS & ANALYSIS ---
     pdf.set_fill_color(236, 240, 241)
@@ -275,7 +287,7 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.set_text_color(20, 20, 20)
     
     if report_data['missing_sections']:
-        pdf.multi_cell(180, 5.5, f"[-] MISSING SECTIONS: ATS gagal mendeteksi bagian: {', '.join(report_data['missing_sections']).title()}. Standar global mewajibkan 4 pilar utama CV: Summary (Profil), Experience (Pengalaman), Education (Pendidikan), dan Skills (Keahlian).")
+        pdf.multi_cell(180, 5.5, f"[-] MISSING SECTIONS: ATS gagal mendeteksi bagian: {', '.join(report_data['missing_sections']).title()}. Standar global mewajibkan 4 pilar utama: Summary, Experience, Education, dan Skills.")
     else:
         pdf.multi_cell(180, 5.5, "[+] STRUCTURE: Sangat baik. Seluruh 4 pilar wajib (Summary, Experience, Education, Skills) telah terdeteksi oleh sistem.")
     pdf.ln(2)
@@ -316,7 +328,11 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 5, xray_warning)
     pdf.ln(4)
 
+    # --- RAW TEXT SANITIZER (Membersihkan Spasi/Enter Berlebih) ---
     safe_raw_text = raw_text.encode('latin-1', 'replace').decode('latin-1')
+    # Mengubah 3 atau lebih baris kosong (enter) menjadi maksimal 2 baris kosong saja agar padat
+    safe_raw_text = re.sub(r'\n{3,}', '\n\n', safe_raw_text)
+    
     pdf.set_font('Courier', '', 8.5)
     pdf.set_text_color(50, 50, 50)
     pdf.set_fill_color(248, 249, 249) 
@@ -329,12 +345,10 @@ st.title("💼 CV Auditor & ATS Readiness")
 st.markdown("Evaluasi anatomi dokumen CV Anda berdasarkan standar global **Human Capital** dan **Mesin ATS**.")
 
 with st.container(border=True):
-    # Teks UI diubah kembali agar sesuai dengan standar bawaan Streamlit
     uploaded_file = st.file_uploader("Upload Dokumen CV (Hanya format PDF)", type=["pdf"])
 
 if uploaded_file:
-    # --- COMMERCIAL UPDATE: Kembalikan Batas ke 200MB ---
-    MAX_FILE_SIZE = 200 * 1024 * 1024 # 200 MB
+    MAX_FILE_SIZE = 200 * 1024 * 1024 
     
     if uploaded_file.size > MAX_FILE_SIZE:
         st.error("⚠️ Ukuran file terlalu besar! Batas maksimal ukuran dokumen CV adalah 200MB.")
@@ -347,7 +361,6 @@ if uploaded_file:
                 
                 if raw_text.strip():
                     res = audit_cv_final(raw_text, num_pages) 
-                    
                     nama_file_asli = uploaded_file.name.rsplit('.', 1)[0]
                     
                     st.write("") 
@@ -395,13 +408,15 @@ if uploaded_file:
                             )
                             st.plotly_chart(fig_radar, use_container_width=True)
 
-                    # --- ROW 2: SCORECARDS ---
+                    # --- ROW 2: SCORECARDS (5 METRIK) ---
                     with st.container(border=True):
-                        m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("Keterbacaan Teks", f"{res['parsability_score']}%")
-                        m2.metric("Kualitas Kalimat (XYZ)", f"{int(res['xyz_score'])}%")
-                        m3.metric("Kelengkapan Kontak", f"{3 - missing_c_count}/3")
-                        m4.metric("Jumlah Halaman", f"{res['pages']} Hal")
+                        # Kita jadikan 5 kolom agar selaras dengan 5 Metrik A-E di PDF
+                        m1, m2, m3, m4, m5 = st.columns(5)
+                        m1.metric("Keterbacaan", f"{res['parsability_score']}%")
+                        m2.metric("Skor XYZ", f"{int(res['xyz_score'])}%")
+                        m3.metric("Kontak", f"{3 - missing_c_count}/3")
+                        m4.metric("Masa Kerja", f"±{res['total_tenure']} Thn")
+                        m5.metric("Halaman", f"{res['pages']} Hal")
 
                     # --- ROW 3: SAAS DASHBOARD TABS ---
                     st.write("")
@@ -427,7 +442,6 @@ if uploaded_file:
                         st.write("Dapatkan hasil audit lengkap beserta rekomendasi perbaikan dalam format PDF berstandar profesional.")
                         
                         pdf_bytes = create_pdf(res, raw_text, nama_file_asli)
-                        
                         tanggal_sekarang = datetime.now().strftime('%d-%m-%Y')
                         nama_file_download = f"{nama_file_asli}-{tanggal_sekarang}.pdf"
                         
@@ -442,7 +456,9 @@ if uploaded_file:
                     with tab3:
                         st.markdown("### Ekstraksi Data Mentah")
                         st.info("Jika teks di bawah berantakan atau menyatu antar kolom, sistem ATS juga akan membacanya demikian.")
-                        st.code(raw_text, language="text")
+                        # Merapikan tampilan Streamlit X-Ray
+                        clean_display_text = re.sub(r'\n{3,}', '\n\n', raw_text)
+                        st.code(clean_display_text, language="text")
 
                 else:
                     st.warning("⚠️ Dokumen kosong atau berisi gambar/scan yang tidak dapat dibaca oleh mesin ATS. Pastikan Anda mengunggah CV format PDF teks (Text-based).")
