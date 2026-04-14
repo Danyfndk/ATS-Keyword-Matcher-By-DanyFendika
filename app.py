@@ -2,11 +2,9 @@ import streamlit as st
 import pdfplumber
 import re
 import nltk
-import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 from fpdf import FPDF
-import io
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Professional CV Auditor V4", layout="wide")
@@ -15,10 +13,15 @@ st.set_page_config(page_title="Professional CV Auditor V4", layout="wide")
 @st.cache_resource
 def setup_nlp():
     nltk.download('punkt', quiet=True)
+    # Kamus diperluas untuk menangkap lebih banyak variasi tense
     action_verbs = [
-        'managed', 'developed', 'spearheaded', 'implemented', 'analyzed', 'led', 
-        'increased', 'decreased', 'optimized', 'created', 'designed', 'built',
-        'negotiated', 'coordinated', 'achieved', 'initiated', 'organized', 'transformed',
+        'manage', 'managed', 'develop', 'developed', 'spearhead', 'spearheaded', 
+        'implement', 'implemented', 'analyze', 'analyzed', 'lead', 'led', 
+        'increase', 'increased', 'decrease', 'decreased', 'optimize', 'optimized', 
+        'create', 'created', 'design', 'designed', 'build', 'built',
+        'negotiate', 'negotiated', 'coordinate', 'coordinated', 'achieve', 'achieved', 
+        'initiate', 'initiated', 'organize', 'organized', 'transform', 'transformed',
+        'assist', 'assisted', 'monitor', 'monitored', 'oversee', 'oversaw', 'maintain', 'maintained',
         'membangun', 'memimpin', 'mengelola', 'mengembangkan', 'meningkatkan', 'menganalisis'
     ]
     return action_verbs
@@ -57,22 +60,28 @@ def audit_cv_final(text):
     report['section_score'] = (len(found_sec) / len(sections)) * 100
     report['missing_sections'] = missing_sec
 
-    # 3. Formula XYZ
-    bullet_count = 0
-    xyz_compliant = 0
+    # 3. Formula XYZ (Penilaian Parsial)
+    valid_lines = 0
+    score_per_line = 0
     metrics = re.findall(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', text)
     
     for line in lines:
         clean_line = line.strip().lower()
-        if re.match(r'^[\-\•\-\*]\s+', line.strip()) or len(line.strip()) > 20:
-            if len(line.strip()) > 5: bullet_count += 1
-            has_verb = any(verb in clean_line for verb in ACTION_VERBS)
+        if len(clean_line) > 30: 
+            valid_lines += 1
+            words_in_line = set(re.findall(r'\b\w+\b', clean_line))
+            
+            has_verb = any(verb in words_in_line for verb in ACTION_VERBS)
             has_metric = any(m in clean_line for m in metrics)
+            
             if has_verb and has_metric:
-                xyz_compliant += 1
-    
-    report['bullet_count'] = bullet_count
-    report['xyz_score'] = (xyz_compliant / bullet_count * 100) if bullet_count > 0 else 0
+                score_per_line += 1.0  # Sempurna
+            elif has_verb:
+                score_per_line += 0.5  # Poin parsial karena ada Action Verb
+            elif has_metric:
+                score_per_line += 0.5  # Poin parsial karena ada Angka
+                
+    report['xyz_score'] = (score_per_line / valid_lines * 100) if valid_lines > 0 else 0
     report['metrics_count'] = len(metrics)
 
     # 4. Total Tenure
@@ -89,99 +98,110 @@ def audit_cv_final(text):
     
     return report
 
-# --- FUNGSI GENERATOR PDF (A4 PROFESSIONAL LAYOUT) ---
+# --- FUNGSI GENERATOR PDF ---
 class PDFReport(FPDF):
     def header(self):
-        # Header Laporan
         self.set_font('Arial', 'B', 18)
-        self.set_text_color(41, 128, 185) # Warna Biru Profesional
-        self.cell(0, 10, 'ATS READINESS & CV AUDIT REPORT', 0, 1, 'C')
+        self.set_text_color(41, 128, 185) 
+        self.cell(190, 10, 'ATS READINESS & CV AUDIT REPORT', 0, 1, 'C')
         self.set_font('Arial', 'I', 10)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 5, f'Generated on: {datetime.now().strftime("%d %B %Y")}', 0, 1, 'C')
+        self.cell(190, 5, f'Generated on: {datetime.now().strftime("%d %B %Y")}', 0, 1, 'C')
         self.line(10, 28, 200, 28)
         self.ln(10)
 
     def footer(self):
-        # Footer Profesional dengan Gelar Baru Anda
         self.set_y(-25)
         self.line(10, 275, 200, 275)
         self.set_font('Arial', 'I', 8)
         self.set_text_color(128, 128, 128)
-        self.cell(0, 5, 'This automated audit report is strictly evaluated based on enterprise ATS standards.', 0, 1, 'C')
+        self.cell(190, 5, 'This automated audit report is strictly evaluated based on enterprise ATS standards.', 0, 1, 'C')
         self.set_font('Arial', 'B', 9)
         self.set_text_color(44, 62, 80)
-        # --- PERUBAHAN GELAR ADA DI BARIS BAWAH INI ---
-        self.cell(0, 5, 'Audit Conducted by: Dany Fendika - ATS Readiness Specialist & HR Data Analyst', 0, 1, 'C')
+        self.cell(190, 5, 'Audit Conducted by: Dany Fendika - ATS Readiness Specialist & HR Data Analyst', 0, 1, 'C')
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 5, f'Page {self.page_no()}', 0, 0, 'C')
+        self.cell(190, 5, f'Page {self.page_no()}', 0, 0, 'C')
 
 def create_pdf(report_data):
     pdf = PDFReport(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    # Skor Utama
     pdf.set_font('Arial', 'B', 14)
     pdf.set_text_color(44, 62, 80)
-    pdf.cell(0, 10, '1. OVERALL EVALUATION', 0, 1, 'L')
+    pdf.cell(190, 10, '1. OVERALL EVALUATION', 0, 1, 'L')
     
     pdf.set_font('Arial', '', 12)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(50, 8, 'Final ATS Score:', 0, 0)
     
-    # Warna skor berdasarkan nilai
-    if report_data['final_score'] >= 80: pdf.set_text_color(39, 174, 96) # Hijau
-    elif report_data['final_score'] >= 50: pdf.set_text_color(241, 196, 15) # Kuning
-    else: pdf.set_text_color(192, 57, 43) # Merah
+    if report_data['final_score'] >= 80: pdf.set_text_color(39, 174, 96)
+    elif report_data['final_score'] >= 50: pdf.set_text_color(241, 196, 15)
+    else: pdf.set_text_color(192, 57, 43)
     
     pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 8, f"{report_data['final_score']} / 100", 0, 1)
+    pdf.cell(140, 8, f"{report_data['final_score']} / 100", 0, 1)
     
     pdf.ln(5)
     
-    # Analisis Metrik
     pdf.set_font('Arial', 'B', 14)
     pdf.set_text_color(44, 62, 80)
-    pdf.cell(0, 10, '2. DETAILED METRICS', 0, 1, 'L')
+    pdf.cell(190, 10, '2. DETAILED METRICS', 0, 1, 'L')
     
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(80, 8, f"- ATS Parsability (Text Readability):", 0, 0)
-    pdf.cell(0, 8, f"{report_data['parsability_score']}%", 0, 1)
+    pdf.cell(110, 8, f"{report_data['parsability_score']}%", 0, 1)
     
     pdf.cell(80, 8, f"- Quantifiable Metrics Found:", 0, 0)
-    pdf.cell(0, 8, f"{report_data['metrics_count']} Data Points", 0, 1)
+    pdf.cell(110, 8, f"{report_data['metrics_count']} Data Points", 0, 1)
     
     pdf.cell(80, 8, f"- Est. Career Tenure Detected:", 0, 0)
-    pdf.cell(0, 8, f"{report_data['total_tenure']} Years", 0, 1)
+    pdf.cell(110, 8, f"{report_data['total_tenure']} Years", 0, 1)
     
     pdf.cell(80, 8, f"- Sentence Quality (Google XYZ):", 0, 0)
-    pdf.cell(0, 8, f"{int(report_data['xyz_score'])}% Strong", 0, 1)
+    pdf.cell(110, 8, f"{int(report_data['xyz_score'])}% Strong", 0, 1)
     
     pdf.ln(5)
     
-    # Rekomendasi
     pdf.set_font('Arial', 'B', 14)
     pdf.set_text_color(44, 62, 80)
-    pdf.cell(0, 10, '3. STRATEGIC RECOMMENDATIONS', 0, 1, 'L')
+    pdf.cell(190, 10, '3. STRATEGIC RECOMMENDATIONS & INFO', 0, 1, 'L')
     
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(50, 50, 50)
     
+    pdf.set_x(10)
     if report_data['missing_sections']:
-        pdf.multi_cell(0, 6, f"[!] Missing Sections: Please add the following standard headers to your CV: {', '.join(report_data['missing_sections'])}.")
+        pdf.multi_cell(w=190, h=6, txt=f"[!] Missing Sections: Please add the following standard headers: {', '.join(report_data['missing_sections'])}.")
     else:
-        pdf.multi_cell(0, 6, "[+] Structure: Excellent. All standard sections are present.")
+        pdf.multi_cell(w=190, h=6, txt="[+] Structure: Excellent. All standard sections are present.")
         
-    if report_data['xyz_score'] < 40:
-        pdf.multi_cell(0, 6, "[!] Content: Your bullet points are weak. Use the format: [Action Verb] + [Task Context] + [Metric/Number] to stand out.")
-        
+    pdf.ln(2)
+    pdf.set_x(10)
     if report_data['parsability_score'] < 85:
-        pdf.multi_cell(0, 6, "[!] Formatting: The system struggled to read some text. Avoid 2-column designs, tables, or non-standard fonts.")
-    elif report_data['parsability_score'] >= 85:
-        pdf.multi_cell(0, 6, "[+] Formatting: Good text extraction. Your layout is ATS-friendly.")
+        pdf.multi_cell(w=190, h=6, txt="[!] Formatting: The system struggled to read some text. Avoid 2-column designs or non-standard fonts.")
+    else:
+        pdf.multi_cell(w=190, h=6, txt="[+] Formatting: Good text extraction. Your layout is ATS-friendly.")
 
-    # Output to Bytes
+    # --- PENAMBAHAN PENJELASAN EDUKASI XYZ SCORE ---
+    pdf.ln(4)
+    pdf.set_font('Arial', 'B', 11)
+    pdf.set_text_color(41, 128, 185)
+    pdf.cell(190, 6, "HOW TO READ YOUR SENTENCE QUALITY (XYZ SCORE):", 0, 1, 'L')
+    pdf.set_font('Arial', '', 10)
+    pdf.set_text_color(50, 50, 50)
+    
+    xyz_explanation = (
+        "Penilaian Kualitas Kalimat menggunakan standar 'Formula XYZ Google', yaitu format penulisan "
+        "yang memadukan [Action Verb] + [Konteks Pekerjaan] + [Metrik/Angka].\n\n"
+        "Sistem ini menerapkan Penilaian Parsial (50% Poin): Jika di dalam satu kalimat deskripsi kerja Anda "
+        "sudah menggunakan Action Verb (contoh: 'Manage', 'Develop', 'Membangun') TETAPI tidak menyertakan "
+        "angka/metrik pencapaian sama sekali, maka kalimat tersebut hanya dinilai 50%.\n"
+        "Skor 0% terjadi apabila kalimat murni berbentuk narasi pasif tanpa Action Verb dan tanpa Angka."
+    )
+    pdf.set_x(10)
+    pdf.multi_cell(w=190, h=5, txt=xyz_explanation)
+
     return bytes(pdf.output(dest='S'))
 
 # --- UI STREAMLIT ---
@@ -228,16 +248,17 @@ if uploaded_file:
             st.subheader("📄 Ekspor Laporan Audit")
             st.markdown("Unduh hasil audit ini dalam format PDF resmi sebagai referensi perbaikan CV Anda.")
             
-            # Generate PDF di latar belakang
-            pdf_bytes = create_pdf(res)
-            
-            st.download_button(
-                label="⬇️ Download PDF Audit Report",
-                data=pdf_bytes,
-                file_name=f"CV_Audit_Report_by_DanyFendika.pdf",
-                mime="application/pdf",
-                type="primary"
-            )
+            try:
+                pdf_bytes = create_pdf(res)
+                st.download_button(
+                    label="⬇️ Download PDF Audit Report",
+                    data=pdf_bytes,
+                    file_name=f"CV_Audit_Report_by_DanyFendika.pdf",
+                    mime="application/pdf",
+                    type="primary"
+                )
+            except Exception as e:
+                st.error(f"Gagal membuat PDF. Detail teknis: {e}")
             
             st.divider()
             
