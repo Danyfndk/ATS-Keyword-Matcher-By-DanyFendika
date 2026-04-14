@@ -9,6 +9,16 @@ from fpdf import FPDF
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="CV Auditor & ATS Readiness", page_icon="📑", layout="wide")
 
+# --- UI CLEANUP (CSS INJECTION) ---
+st.markdown("""
+    <style>
+        /* Menyembunyikan teks bawaan '200MB per file' dari Streamlit agar tidak kontradiktif */
+        [data-testid="stFileUploadDropzone"] small {
+            display: none !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- INISIALISASI DATA NLP ---
 @st.cache_resource
 def setup_nlp():
@@ -336,7 +346,6 @@ if uploaded_file:
         st.error("⚠️ Ukuran file terlalu besar! Batas maksimal ukuran dokumen CV adalah 1MB.")
     else:
         with st.spinner("Mesin sedang mengekstrak dan mengaudit dokumen..."):
-            # --- COMMERCIAL UPDATE: Error Handling untuk Keamanan Aplikasi ---
             try:
                 with pdfplumber.open(uploaded_file) as pdf:
                     num_pages = len(pdf.pages) 
@@ -445,5 +454,4 @@ if uploaded_file:
                     st.warning("⚠️ Dokumen kosong atau berisi gambar/scan yang tidak dapat dibaca oleh mesin ATS. Pastikan Anda mengunggah CV format PDF teks (Text-based).")
             
             except Exception as e:
-                # Menangkap error jika PDF rusak atau dienkripsi/password
                 st.error("⚠️ Sistem gagal membaca dokumen. Pastikan file PDF tidak rusak dan tidak diproteksi oleh password.")
