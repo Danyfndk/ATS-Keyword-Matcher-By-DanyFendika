@@ -281,7 +281,7 @@ if uploaded_file:
             
             st.write("") # Spacing
             
-            # --- ROW 1: SCORE & MATRIX ---
+            # --- ROW 1: SCORE & MATRIX (DENGAN PERBAIKAN TINGGI PRESISI) ---
             col_chart, col_matrix = st.columns([1.2, 1])
             
             with col_chart:
@@ -302,7 +302,8 @@ if uploaded_file:
                                 {'range': [80, 100], 'color': "#d5f5e3"}]
                         }
                     ))
-                    fig.update_layout(height=250, margin=dict(l=10, r=10, t=10, b=10))
+                    # --- PERBAIKAN: Tinggi gauge dikurangi (dari 250 ke 230) agar kontainer sejajar sempurna ---
+                    fig.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10))
                     st.plotly_chart(fig, use_container_width=True)
 
             with col_matrix:
@@ -321,14 +322,19 @@ if uploaded_file:
                 m3.metric("Data/Metrik Ditemukan", f"{res['metrics_count']}", help="Jumlah angka/persentase yang valid di dalam CV.")
                 m4.metric("Estimasi Masa Kerja", f"± {res['total_tenure']} Thn", help="Perhitungan otomatis dari format tanggal di CV.")
 
-            # --- ROW 3: REPORT & X-RAY ---
+            # --- ROW 3: REPORT & X-RAY (DENGAN PERBAIKAN TINGGI PRESISI) ---
             st.write("")
             col_dl, col_xray = st.columns([1, 1])
             
             with col_dl:
                 with st.container(border=True):
                     st.subheader("📄 Ekspor Laporan")
-                    st.markdown("Unduh hasil audit resmi (PDF) berisi rekomendasi dan tampilan *X-Ray Vision*.")
+                    st.markdown("Unduh hasil audit resmi (PDF) berisi rekomendasi dan tampilan X-Ray Vision.")
+                    
+                    # --- PERBAIKAN: Menambahkan spasi kosong untuk menambah tinggi alami kontainer kiri agar sejajar dengan kontainer kanan ---
+                    st.write("") # Spasi kosong 1
+                    st.write("") # Spasi kosong 2
+
                     pdf_bytes = create_pdf(res, raw_text)
                     st.download_button(
                         label="⬇️ Download Enterprise PDF Report",
