@@ -3,161 +3,159 @@ import pdfplumber
 import re
 import nltk
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
 # --- KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="Open-Source ATS Matcher", layout="wide")
+st.set_page_config(page_title="CV Auditor & ATS Readiness", layout="wide")
 
 # --- INISIALISASI NLTK ---
 @st.cache_resource
-def load_nlp_tools():
-    # Download stopwords
+def load_nlp_data():
     nltk.download('stopwords', quiet=True)
+    nltk.download('punkt', quiet=True)
+    return set(stopwords.words('english')).union(set(stopwords.words('indonesian')))
+
+stop_words = load_nlp_data()
+
+# --- LOGIKA AUDITOR (BACKEND) ---
+
+def audit_cv(text):
+    results = {}
+    text_clean = text.lower()
+    lines = text.split('\n')
     
-    # Siapkan stopwords gabungan (Inggris & Indonesia)
-    stop_words_en = set(stopwords.words('english'))
-    stop_words_id = set(stopwords.words('indonesian'))
-    all_stopwords = list(stop_words_en.union(stop_words_id))
-    
-    return all_stopwords
+    # 1. ATS Parsability (Keterbacaan Mesin)
+    # Menghitung rasio karakter non-alphanumeric (simbol aneh)
+    total_chars = len(text)
+    if total_chars > 0:
+        special_chars = len(re.findall(r'[^a-zA-Z0-9\s]', text))
+        parsability_ratio = (total_chars - special_chars) / total_chars
+        results['parsability'] = {
+            'score': round(parsability_ratio * 100, 1),
+            'status': "Sangat Baik" if parsability_ratio > 0.85 else "Perlu Perbaikan (Terlalu banyak simbol/format rumit)"
+        }
 
-custom_stopwords = load_nlp_tools()
+    # 2. Section Header Recognition (Kelengkapan Struktur)
+    sections = {
+        'Experience/Pengalaman': r'(experience|pengalaman kerja|work history|career)',
+        'Education/Pendidikan': r'(education|pendidikan|academic)',
+        'Skills/Keahlian': r'(skills|keahlian|competencies|kemampuan)',
+        'Summary/Profile': r'(summary|profile|tentang saya|overview)',
+        'Contact/Kontak': r'(contact|informasi kontak|telepon|email)'
+    }
+    found_sections = []
+    missing_sections = []
+    for section, pattern in sections.items():
+        if re.search(pattern, text_clean):
+            found_sections.append(section)
+        else:
+            missing_sections.append(section)
+    results['sections'] = {'found': found_sections, 'missing': missing_sections}
 
-# --- FUNGSI EKSTRAKSI PDF ---
-def extract_text_from_pdf(uploaded_file):
-    text = ""
-    with pdfplumber.open(uploaded_file) as pdf:
-        for page in pdf.pages:
-            extracted = page.extract_text()
-            if extracted:
-                text += extracted + "\n"
-    return text
-
-# --- FUNGSI CEK PROFESIONALITAS (Pengganti LanguageTool) ---
-def check_professionalism(text):
-    issues = []
-    text_lower = text.lower()
-
-    # 1. Deteksi kata informal/kasual
-    casual_words = ['bikin', 'ngerjain', 'gue', 'aku', 'nyari', 'gonna', 'wanna', 'stuff', 'things']
-    found_casual = [word for word in casual_words if re.search(r'\b' + word + r'\b', text_lower)]
-    if found_casual:
-        issues.append(f"⚠️ **Hindari kata informal:** Ditemukan kata '{', '.join(found_casual)}'. Gunakan bahasa yang lebih profesional.")
-
-    # 2. Deteksi Kata Ganti Orang (Di CV, sebaiknya dihindari)
-    pronouns = [' saya ', ' aku ', ' i ', ' me ', ' my ']
-    found_pronouns = [p.strip() for p in pronouns if p in text_lower]
-    if len(found_pronouns) > 2:
-        issues.append("⚠️ **Kata Ganti Orang Berlebih:** CV yang baik menghindari kata ganti (saya, I, me). Langsung gunakan 'Action Verbs' (contoh: 'Memimpin tim...' bukan 'Saya memimpin tim...').")
-
-    # 3. Pengecekan Email
-    emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
-    if emails:
-        for email in emails:
-            if re.search(r'\d{4,}', email): 
-                issues.append(f"ℹ️ **Saran Email:** Email '{email}' mengandung banyak angka. Pertimbangkan menggunakan nama bersih agar terlihat lebih profesional.")
+    # 3. Word Volume & Brevity (Kepadatan Teks)
+    words = text.split()
+    word_count = len(words)
+    if word_count < 300:
+        volume_status = "Terlalu Singkat (Kurang detail)"
+    elif 300 <= word_count <= 700:
+        volume_status = "Optimal (Ideal untuk 1-2 halaman)"
     else:
-        issues.append("❌ **Data Kontak:** Tidak ditemukan alamat email di dalam CV Anda.")
+        volume_status = "Terlalu Padat (Beresiko diabaikan rekruter)"
+    results['volume'] = {'count': word_count, 'status': volume_status}
 
-    if not issues:
-        issues.append("✅ Kosakata dan format teks terlihat profesional.")
-
-    return issues
-
-# --- FUNGSI ATS SCORING & KEYWORD EXTRACTION ---
-def analyze_ats_metrics(cv_text, jd_text):
-    # 1. Menghitung Cosine Similarity (Skor ATS)
-    vectorizer = TfidfVectorizer(stop_words=custom_stopwords, ngram_range=(1, 2))
-    tfidf_matrix = vectorizer.fit_transform([jd_text, cv_text])
-    match_score = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0] * 100
-    
-    # 2. Ekstraksi Kata Kunci yang Hilang
-    jd_vectorizer = TfidfVectorizer(stop_words=custom_stopwords, ngram_range=(1, 2))
-    jd_vectorizer.fit([jd_text])
-    jd_keywords = set(jd_vectorizer.get_feature_names_out())
-    
-    cv_vectorizer = TfidfVectorizer(stop_words=custom_stopwords, ngram_range=(1, 2))
-    cv_vectorizer.fit([cv_text])
-    cv_keywords = set(cv_vectorizer.get_feature_names_out())
-    
-    missing_keywords = list(jd_keywords - cv_keywords)
-    # Sortir berdasarkan panjang kata, ambil 10 teratas
-    missing_keywords = sorted(missing_keywords, key=len, reverse=True)[:10]
-
-    # 3. Analisis Quantifiable Metrics (Angka/Persentase menggunakan Regex)
-    metrics_found = re.findall(r'\b\d+(?:[\.,]\d+)?\b|\b\d+%', cv_text)
-    
-    return {
-        "score": round(match_score, 1),
-        "missing_keywords": missing_keywords,
-        "metrics_count": len(metrics_found)
+    # 4. Digital Footprint (LinkedIn & Link Verifier)
+    linkedin_found = re.search(r'linkedin\.com\/in\/[a-z0-9\-]+', text_clean)
+    github_found = re.search(r'github\.com\/[a-z0-9\-]+', text_clean)
+    results['footprint'] = {
+        'linkedin': True if linkedin_found else False,
+        'github': True if github_found else False
     }
 
-# --- ANTARMUKA STREAMLIT ---
-st.title("📄 Open-Source ATS Keyword Matcher")
-st.markdown("Sistem analisis CV lokal berbasis statistik (TF-IDF & Cosine Similarity) yang aman, cepat, dan 100% *offline*.")
+    # 5. Buzzword & Fluff Detector (Pendeteksi Klise)
+    buzzwords = ['hard worker', 'pekerja keras', 'team player', 'think outside the box', 'synergy', 'fast learner', 'cepat belajar', 'responsible']
+    found_buzz = [word for word in buzzwords if re.search(r'\b' + word + r'\b', text_clean)]
+    results['buzzwords'] = found_buzz
 
-col1, col2 = st.columns(2)
+    # 6. Quantifiable Metrics (Data Storytelling)
+    # Mencari angka, persentase, atau simbol mata uang
+    metrics = re.findall(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', text)
+    results['metrics_count'] = len(metrics)
 
-with col1:
-    st.subheader("1. Unggah CV (PDF)")
-    uploaded_cv = st.file_uploader("Unggah dokumen CV", type=["pdf"])
+    # 7. Bullet Point Density
+    bullet_patterns = [r'^\s*[\-\•\-\*]\s+', r'^\s*\d+\.\s+']
+    bullet_count = 0
+    for line in lines:
+        if any(re.match(p, line.strip()) for p in bullet_patterns):
+            bullet_count += 1
+    results['bullet_count'] = bullet_count
 
-with col2:
-    st.subheader("2. Job Description")
-    job_description = st.text_area("Paste dekskripsi lowongan kerja", height=150)
+    return results
 
-if st.button("🚀 Analisis CV Sekarang", type="primary", use_container_width=True):
-    if uploaded_cv and job_description:
-        with st.spinner("Menjalankan pipeline analitik..."):
+# --- ANTARMUKA STREAMLIT (FRONTEND) ---
+
+st.title("🛡️ CV Auditor & ATS Readiness Evaluator")
+st.markdown("Aplikasi ini menganalisis kualitas struktur CV Anda berdasarkan standar teknis sistem ATS dan praktik terbaik Human Capital.")
+
+uploaded_file = st.file_uploader("Unggah CV Anda (Format PDF)", type=["pdf"])
+
+if uploaded_file:
+    with st.spinner("Menganalisis anatomi dokumen..."):
+        with pdfplumber.open(uploaded_file) as pdf:
+            full_text = ""
+            for page in pdf.pages:
+                full_text += page.extract_text() + "\n"
+        
+        if not full_text.strip():
+            st.error("Gagal membaca teks. CV Anda mungkin berupa gambar hasil scan (bukan teks asli).")
+        else:
+            report = audit_cv(full_text)
             
-            cv_text = extract_text_from_pdf(uploaded_cv)
+            # --- DASHBOARD HASIL ---
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Skor Keterbacaan Mesin", f"{report['parsability']['score']}%")
+            with col2:
+                st.metric("Total Kata", report['volume']['count'])
+            with col3:
+                st.metric("Metrik Data Ditemukan", report['metrics_count'])
+
+            st.divider()
+
+            c1, c2 = st.columns(2)
             
-            if not cv_text.strip():
-                st.error("Gagal mengekstrak teks. Pastikan CV bukan gambar hasil scan.")
-            else:
-                professionalism_issues = check_professionalism(cv_text)
-                ats_results = analyze_ats_metrics(cv_text, job_description)
+            with c1:
+                st.subheader("📂 Kelengkapan Struktur")
+                for sec in report['sections']['found']:
+                    st.write(f"✅ {sec}")
+                for sec in report['sections']['missing']:
+                    st.write(f"❌ {sec} (Tidak Terdeteksi)")
                 
-                st.success("Pemrosesan Data Selesai!")
-                
-                # --- DASHBOARD HASIL ---
-                st.markdown(f"### 🎯 ATS Match Score: **{ats_results['score']}%**")
-                st.progress(ats_results['score'] / 100)
-                st.caption("*Skor dihitung menggunakan model jarak vektor Cosine Similarity.*")
-                
-                st.divider()
-                
-                col_res1, col_res2 = st.columns(2)
-                
-                with col_res1:
-                    st.subheader("🔑 Rekomendasi Keyword (Gap Analysis)")
-                    st.write("Kata kunci dari Job Deskripsi yang **tidak ditemukan** di CV Anda:")
-                    if ats_results['missing_keywords']:
-                        for kw in ats_results['missing_keywords']:
-                            st.warning(f"- {kw}")
-                    else:
-                        st.success("Semua kata kunci utama tampaknya sudah masuk di CV Anda!")
-                        
-                    st.subheader("📊 Analisis Data Storytelling")
-                    if ats_results['metrics_count'] > 5:
-                        st.success(f"Sangat Baik! Ditemukan **{ats_results['metrics_count']} metrik kuantitatif** (angka/persentase). Ini menunjukkan orientasi pada pencapaian nyata.")
-                    elif ats_results['metrics_count'] > 0:
-                        st.info(f"Cukup. Ditemukan **{ats_results['metrics_count']} metrik kuantitatif**. Disarankan untuk memperbanyak penyajian data pada pengalaman kerja.")
-                    else:
-                        st.error("Tidak ditemukan angka atau metrik dalam CV. Praktisi Human Capital sangat menghargai pencapaian yang terukur.")
+                st.subheader("🌐 Jejak Digital")
+                st.write(f"{'✅' if report['footprint']['linkedin'] else '❌'} LinkedIn Profile")
+                st.write(f"{'✅' if report['footprint']['github'] else '❌'} Portfolio/GitHub")
 
-                with col_res2:
-                    st.subheader("✍️ Cek Profesionalitas & Format")
-                    for issue in professionalism_issues:
-                        st.write(issue)
-                        
-                    st.markdown("---")
-                    st.write("**Rekomendasi Format Standar ATS:**")
-                    st.write("- Gunakan tata letak vertikal sederhana (satu kolom).")
-                    st.write("- Simpan file dengan nama yang jelas (contoh: *NamaLengkap_Posisi_CV.pdf*).")
-                    st.write("- Pastikan menggunakan *font* yang mudah dibaca mesin (Arial, Calibri, Helvetica).")
+            with c2:
+                st.subheader("✍️ Analisis Diksi & Konten")
+                st.info(f"**Status Kepadatan:** {report['volume']['status']}")
+                
+                if report['buzzwords']:
+                    st.warning(f"**Buzzwords Terdeteksi:** {', '.join(report['buzzwords'])}")
+                    st.caption("Saran: Ganti kata klise di atas dengan bukti pencapaian nyata.")
+                else:
+                    st.success("Bagus! Tidak ditemukan kata-kata klise yang berlebihan.")
 
-    else:
-        st.warning("Mohon lengkapi pengunggahan CV dan input Job Description.")
+                st.subheader("📊 Struktur Poin (Bullet Points)")
+                if report['bullet_count'] < 5:
+                    st.error(f"Ditemukan {report['bullet_count']} poin. Terlalu sedikit. Gunakan bullet points untuk memudahkan rekruter melakukan skimming.")
+                else:
+                    st.success(f"Ditemukan {report['bullet_count']} poin. Struktur list sudah cukup baik.")
+
+            st.divider()
+            st.subheader("💡 Rekomendasi Auditor")
+            if report['parsability']['score'] < 85:
+                st.warning("- **Perbaiki Format:** CV Anda memiliki banyak karakter non-standar. Gunakan font standar seperti Arial atau Calibri dan hindari tabel kompleks.")
+            if report['metrics_count'] < 3:
+                st.warning("- **Data Storytelling:** Tambahkan angka atau persentase untuk membuktikan keberhasilan Anda (misal: 'Meningkatkan penjualan 15%' alih-alih 'Meningkatkan penjualan').")
+            if not report['footprint']['linkedin']:
+                st.warning("- **Optimasi Profil:** Tambahkan tautan profil LinkedIn yang aktif untuk meningkatkan kredibilitas profesional.")
+            if report['sections']['missing']:
+                st.warning(f"- **Header Hilang:** Pastikan Anda memiliki bagian {', '.join(report['sections']['missing'])} dengan judul yang standar.")
