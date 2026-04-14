@@ -2,182 +2,248 @@ import streamlit as st
 import pdfplumber
 import re
 import nltk
-from nltk.corpus import stopwords
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime
+from fpdf import FPDF
+import io
 
 # --- KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="CV Auditor & ATS Readiness", layout="wide")
+st.set_page_config(page_title="Professional CV Auditor V4", layout="wide")
 
-# --- INISIALISASI NLTK ---
+# --- INISIALISASI DATA ---
 @st.cache_resource
-def load_nlp_data():
-    nltk.download('stopwords', quiet=True)
+def setup_nlp():
     nltk.download('punkt', quiet=True)
-    return set(stopwords.words('english')).union(set(stopwords.words('indonesian')))
+    action_verbs = [
+        'managed', 'developed', 'spearheaded', 'implemented', 'analyzed', 'led', 
+        'increased', 'decreased', 'optimized', 'created', 'designed', 'built',
+        'negotiated', 'coordinated', 'achieved', 'initiated', 'organized', 'transformed',
+        'membangun', 'memimpin', 'mengelola', 'mengembangkan', 'meningkatkan', 'menganalisis'
+    ]
+    return action_verbs
 
-stop_words = load_nlp_data()
+ACTION_VERBS = setup_nlp()
 
-# --- LOGIKA AUDITOR (BACKEND) ---
+# --- FUNGSI UTAMA AUDITOR ---
+def calculate_tenure(text):
+    year_patterns = re.findall(r'(\b20\d{2}\b)\s*[\-\–]\s*(\b20\d{2}\b|present|now|current)', text.lower())
+    total_years = 0
+    current_year = datetime.now().year
+    
+    for start, end in year_patterns:
+        start_yr = int(start)
+        end_yr = current_year if end in ['present', 'now', 'current'] else int(end)
+        diff = end_yr - start_yr
+        if 0 < diff < 40:
+            total_years += diff
+    return total_years
 
-def audit_cv(text):
-    results = {}
+def audit_cv_final(text):
     text_clean = text.lower()
     lines = text.split('\n')
-    
+    report = {}
+
     # 1. ATS Parsability
-    total_chars = len(text)
-    if total_chars > 0:
-        special_chars = len(re.findall(r'[^a-zA-Z0-9\s\.\,\@\+\-\(\)]', text))
-        parsability_ratio = (total_chars - special_chars) / total_chars
-        results['parsability'] = {
-            'score': round(parsability_ratio * 100, 1),
-            'status': "Sangat Baik" if parsability_ratio > 0.85 else "Perlu Perbaikan"
-        }
+    special_chars = len(re.findall(r'[^a-zA-Z0-9\s\.\,\@\+\-\(\)]', text))
+    parsability = ((len(text) - special_chars) / len(text)) * 100 if len(text) > 0 else 0
+    report['parsability_score'] = round(parsability, 1)
 
-    # 2. Section Header & Content Recognition (LEBIH CERDAS)
-    found_sections = []
-    missing_sections = []
+    # 2. Section Analysis
+    sections = {'Experience': r'experience|pengalaman', 'Education': r'education|pendidikan', 
+                'Skills': r'skills|keahlian', 'Summary': r'summary|profile|overview'}
+    found_sec = [s for s, p in sections.items() if re.search(p, text_clean)]
+    missing_sec = [s for s in sections.keys() if s not in found_sec]
+    report['section_score'] = (len(found_sec) / len(sections)) * 100
+    report['missing_sections'] = missing_sec
 
-    # -- Cek Pengalaman, Pendidikan, Skil (Tetap Header Matching) --
-    if re.search(r'(experience|pengalaman|work history)', text_clean):
-        found_sections.append('Experience/Pengalaman')
-    else: missing_sections.append('Experience/Pengalaman')
-
-    if re.search(r'(education|pendidikan)', text_clean):
-        found_sections.append('Education/Pendidikan')
-    else: missing_sections.append('Education/Pendidikan')
-
-    if re.search(r'(skills|keahlian|competencies)', text_clean):
-        found_sections.append('Skills/Keahlian')
-    else: missing_sections.append('Skills/Keahlian')
-
-    # -- Cek Summary (Content Matching) --
-    # Asumsi: Jika ada paragraf di atas section Experience, itu adalah Summary
-    exp_match = re.search(r'(experience|pengalaman)', text_clean)
-    if exp_match and exp_match.start() > 150:
-        found_sections.append('Summary/Profile (Terdeteksi dari format paragraf)')
-    elif re.search(r'(summary|profile|tentang saya|overview)', text_clean):
-        found_sections.append('Summary/Profile')
-    else:
-        missing_sections.append('Summary/Profile')
-
-    # -- Cek Kontak (Content Matching: Deteksi Email atau No HP) --
-    has_email = bool(re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text))
-    # Menghapus spasi dan strip sementara untuk mengecek nomor HP (misal +62 8125...)
-    text_no_spaces = re.sub(r'[\s\-]', '', text) 
-    has_phone = bool(re.search(r'\+?\d{10,14}', text_no_spaces))
-    
-    if has_email or has_phone:
-        found_sections.append('Contact/Kontak (Terdeteksi via Email/Telepon)')
-    else:
-        missing_sections.append('Contact/Kontak')
-    results['sections'] = {'found': found_sections, 'missing': missing_sections}
-
-    # 3. Word Volume
-    words = text.split()
-    word_count = len(words)
-    if word_count < 250:
-        volume_status = "Terlalu Singkat (Kurang detail pencapaian)"
-    elif 250 <= word_count <= 700:
-        volume_status = "Optimal (Ideal untuk 1-2 halaman)"
-    else:
-        volume_status = "Terlalu Padat (Beresiko diabaikan rekruter)"
-    results['volume'] = {'count': word_count, 'status': volume_status}
-
-    # 4. Digital Footprint (Diperlonggar)
-    # Mencari kata 'linkedin' atau URL linkedin. Ikon tidak terbaca oleh parser.
-    linkedin_found = re.search(r'linkedin', text_clean)
-    github_found = re.search(r'(github|portfolio|behance|dribbble|gitlab)', text_clean)
-    results['footprint'] = {
-        'linkedin': True if linkedin_found else False,
-        'github': True if github_found else False
-    }
-
-    # 5. Buzzword Detector
-    buzzwords = ['hard worker', 'pekerja keras', 'team player', 'think outside the box', 'synergy', 'fast learner', 'cepat belajar']
-    found_buzz = [word for word in buzzwords if re.search(r'\b' + word + r'\b', text_clean)]
-    results['buzzwords'] = found_buzz
-
-    # 6. Quantifiable Metrics
+    # 3. Formula XYZ
+    bullet_count = 0
+    xyz_compliant = 0
     metrics = re.findall(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', text)
-    results['metrics_count'] = len(metrics)
+    
+    for line in lines:
+        clean_line = line.strip().lower()
+        if re.match(r'^[\-\•\-\*]\s+', line.strip()) or len(line.strip()) > 20:
+            if len(line.strip()) > 5: bullet_count += 1
+            has_verb = any(verb in clean_line for verb in ACTION_VERBS)
+            has_metric = any(m in clean_line for m in metrics)
+            if has_verb and has_metric:
+                xyz_compliant += 1
+    
+    report['bullet_count'] = bullet_count
+    report['xyz_score'] = (xyz_compliant / bullet_count * 100) if bullet_count > 0 else 0
+    report['metrics_count'] = len(metrics)
 
-    # 7. Bullet Point Density
-    bullet_patterns = [r'^\s*[\-\•\-\*]\s+', r'^\s*\d+\.\s+']
-    bullet_count = sum(1 for line in lines if any(re.match(p, line.strip()) for p in bullet_patterns))
-    results['bullet_count'] = bullet_count
+    # 4. Total Tenure
+    report['total_tenure'] = calculate_tenure(text)
 
-    return results
+    # 5. Final Score
+    final_score = (
+        (report['parsability_score'] * 0.4) + 
+        (min(report['xyz_score'] * 1.5, 100) * 0.3) + 
+        (min(len(metrics) * 10, 100) * 0.2) + 
+        (report['section_score'] * 0.1)
+    )
+    report['final_score'] = round(final_score, 1)
+    
+    return report
 
-# --- ANTARMUKA STREAMLIT (FRONTEND) ---
+# --- FUNGSI GENERATOR PDF (A4 PROFESSIONAL LAYOUT) ---
+class PDFReport(FPDF):
+    def header(self):
+        # Header Laporan
+        self.set_font('Arial', 'B', 18)
+        self.set_text_color(41, 128, 185) # Warna Biru Profesional
+        self.cell(0, 10, 'ATS READINESS & CV AUDIT REPORT', 0, 1, 'C')
+        self.set_font('Arial', 'I', 10)
+        self.set_text_color(100, 100, 100)
+        self.cell(0, 5, f'Generated on: {datetime.now().strftime("%d %B %Y")}', 0, 1, 'C')
+        self.line(10, 28, 200, 28)
+        self.ln(10)
 
-st.title("🛡️ CV Auditor & ATS Readiness Evaluator")
-st.markdown("Aplikasi ini menganalisis kualitas anatomi CV Anda berdasarkan standar teknis sistem pembaca mesin (ATS).")
+    def footer(self):
+        # Footer Profesional dengan Gelar Baru Anda
+        self.set_y(-25)
+        self.line(10, 275, 200, 275)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128, 128, 128)
+        self.cell(0, 5, 'This automated audit report is strictly evaluated based on enterprise ATS standards.', 0, 1, 'C')
+        self.set_font('Arial', 'B', 9)
+        self.set_text_color(44, 62, 80)
+        # --- PERUBAHAN GELAR ADA DI BARIS BAWAH INI ---
+        self.cell(0, 5, 'Audit Conducted by: Dany Fendika - ATS Readiness Specialist & HR Data Analyst', 0, 1, 'C')
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 5, f'Page {self.page_no()}', 0, 0, 'C')
 
-uploaded_file = st.file_uploader("Unggah CV Anda (Format PDF)", type=["pdf"])
+def create_pdf(report_data):
+    pdf = PDFReport(orientation='P', unit='mm', format='A4')
+    pdf.add_page()
+    
+    # Skor Utama
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 10, '1. OVERALL EVALUATION', 0, 1, 'L')
+    
+    pdf.set_font('Arial', '', 12)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(50, 8, 'Final ATS Score:', 0, 0)
+    
+    # Warna skor berdasarkan nilai
+    if report_data['final_score'] >= 80: pdf.set_text_color(39, 174, 96) # Hijau
+    elif report_data['final_score'] >= 50: pdf.set_text_color(241, 196, 15) # Kuning
+    else: pdf.set_text_color(192, 57, 43) # Merah
+    
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 8, f"{report_data['final_score']} / 100", 0, 1)
+    
+    pdf.ln(5)
+    
+    # Analisis Metrik
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 10, '2. DETAILED METRICS', 0, 1, 'L')
+    
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(80, 8, f"- ATS Parsability (Text Readability):", 0, 0)
+    pdf.cell(0, 8, f"{report_data['parsability_score']}%", 0, 1)
+    
+    pdf.cell(80, 8, f"- Quantifiable Metrics Found:", 0, 0)
+    pdf.cell(0, 8, f"{report_data['metrics_count']} Data Points", 0, 1)
+    
+    pdf.cell(80, 8, f"- Est. Career Tenure Detected:", 0, 0)
+    pdf.cell(0, 8, f"{report_data['total_tenure']} Years", 0, 1)
+    
+    pdf.cell(80, 8, f"- Sentence Quality (Google XYZ):", 0, 0)
+    pdf.cell(0, 8, f"{int(report_data['xyz_score'])}% Strong", 0, 1)
+    
+    pdf.ln(5)
+    
+    # Rekomendasi
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 10, '3. STRATEGIC RECOMMENDATIONS', 0, 1, 'L')
+    
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(50, 50, 50)
+    
+    if report_data['missing_sections']:
+        pdf.multi_cell(0, 6, f"[!] Missing Sections: Please add the following standard headers to your CV: {', '.join(report_data['missing_sections'])}.")
+    else:
+        pdf.multi_cell(0, 6, "[+] Structure: Excellent. All standard sections are present.")
+        
+    if report_data['xyz_score'] < 40:
+        pdf.multi_cell(0, 6, "[!] Content: Your bullet points are weak. Use the format: [Action Verb] + [Task Context] + [Metric/Number] to stand out.")
+        
+    if report_data['parsability_score'] < 85:
+        pdf.multi_cell(0, 6, "[!] Formatting: The system struggled to read some text. Avoid 2-column designs, tables, or non-standard fonts.")
+    elif report_data['parsability_score'] >= 85:
+        pdf.multi_cell(0, 6, "[+] Formatting: Good text extraction. Your layout is ATS-friendly.")
+
+    # Output to Bytes
+    return bytes(pdf.output(dest='S'))
+
+# --- UI STREAMLIT ---
+st.title("🚀 Professional CV Auditor & Dashboard V4")
+st.markdown("Sistem audit CV independen. Evaluasi anatomi dokumen Anda berdasarkan standar *Human Capital*.")
+
+uploaded_file = st.file_uploader("Upload CV PDF Anda di sini", type=["pdf"])
 
 if uploaded_file:
-    with st.spinner("Mengekstrak dan menganalisis teks dokumen..."):
+    with st.spinner("Mengaudit dokumen..."):
         with pdfplumber.open(uploaded_file) as pdf:
-            full_text = ""
-            for page in pdf.pages:
-                full_text += page.extract_text() + "\n"
+            raw_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
         
-        if not full_text.strip():
-            st.error("Gagal membaca teks. CV Anda mungkin berupa gambar atau desain Canva yang disatukan menjadi gambar rata (flattened).")
+        if raw_text:
+            res = audit_cv_final(raw_text)
+            
+            # Tampilan Dashboard
+            col_chart, col_stats = st.columns([2, 1])
+            with col_chart:
+                fig = go.Figure(go.Indicator(
+                    mode = "gauge+number",
+                    value = res['final_score'],
+                    title = {'text': "Overall ATS Readiness Score"},
+                    gauge = {
+                        'axis': {'range': [0, 100]},
+                        'bar': {'color': "#2ecc71"},
+                        'steps': [
+                            {'range': [0, 50], 'color': "#e74c3c"},
+                            {'range': [50, 80], 'color': "#f1c40f"},
+                            {'range': [80, 100], 'color': "#2ecc71"}]
+                    }
+                ))
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col_stats:
+                st.write("### 📊 Quick Stats")
+                st.metric("Estimasi Pengalaman", f"± {res['total_tenure']} Tahun")
+                st.metric("Metrik (Angka)", f"{res['metrics_count']} Data")
+                st.metric("Kualitas Kalimat", f"{int(res['xyz_score'])}%")
+
+            st.divider()
+
+            # --- FITUR DOWNLOAD PDF ---
+            st.subheader("📄 Ekspor Laporan Audit")
+            st.markdown("Unduh hasil audit ini dalam format PDF resmi sebagai referensi perbaikan CV Anda.")
+            
+            # Generate PDF di latar belakang
+            pdf_bytes = create_pdf(res)
+            
+            st.download_button(
+                label="⬇️ Download PDF Audit Report",
+                data=pdf_bytes,
+                file_name=f"CV_Audit_Report_by_DanyFendika.pdf",
+                mime="application/pdf",
+                type="primary"
+            )
+            
+            st.divider()
+            
+            st.subheader("🛠️ X-Ray Vision (Teks Mentah)")
+            with st.expander("Lihat bagaimana mesin ATS membaca CV Anda"):
+                st.code(raw_text, language="text")
+
         else:
-            report = audit_cv(full_text)
-            
-            # --- DASHBOARD HASIL ---
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Skor Keterbacaan Mesin", f"{report['parsability']['score']}%")
-            with col2:
-                st.metric("Total Kata", report['volume']['count'])
-            with col3:
-                st.metric("Metrik Data (Angka) Ditemukan", report['metrics_count'])
-
-            st.divider()
-
-            c1, c2 = st.columns(2)
-            
-            with c1:
-                st.subheader("📂 Kelengkapan Struktur")
-                for sec in report['sections']['found']:
-                    st.success(f"✅ {sec}")
-                for sec in report['sections']['missing']:
-                    st.error(f"❌ {sec} (Tidak Terdeteksi)")
-                
-                st.subheader("🌐 Jejak Digital")
-                if report['footprint']['linkedin']:
-                    st.success("✅ LinkedIn Profile Terdeteksi")
-                else:
-                    st.error("❌ LinkedIn Profile")
-                
-                if report['footprint']['github']:
-                    st.success("✅ Portfolio/Link Tambahan Terdeteksi")
-                else:
-                    st.error("❌ Portfolio/Link Tambahan")
-
-            with c2:
-                st.subheader("✍️ Analisis Diksi & Konten")
-                st.info(f"**Status Kepadatan:** {report['volume']['status']}")
-                
-                if report['buzzwords']:
-                    st.warning(f"**Buzzwords Terdeteksi:** {', '.join(report['buzzwords'])}")
-                else:
-                    st.success("Bagus! Tidak ditemukan kata-kata klise yang berlebihan.")
-
-                st.subheader("📊 Struktur Poin (Bullet Points)")
-                if report['bullet_count'] < 5:
-                    st.error(f"Ditemukan {report['bullet_count']} poin. Terlalu sedikit. CV dengan format paragraf naratif (seperti pengalaman kerja di CV ini) sangat sulit di-skimming oleh rekruter.")
-                else:
-                    st.success(f"Ditemukan {report['bullet_count']} poin. Struktur list sudah cukup baik.")
-
-            st.divider()
-            st.subheader("💡 Rekomendasi Auditor")
-            if "Summary/Profile" in report['sections']['missing']:
-                st.warning("- **Header Hilang:** Sangat disarankan untuk tetap menuliskan kata 'Summary' atau 'Profile' agar mesin mudah memetakan data Anda.")
-            if not report['footprint']['linkedin']:
-                st.warning("- **Krisis Keterbacaan Ikon:** Mesin ATS tidak bisa membaca ikon/logo LinkedIn. Tulislah URL Anda secara eksplisit (contoh: *linkedin.com/in/namaanda*) atau minimal tulis kata 'LinkedIn'.")
-            if report['bullet_count'] < 5:
-                st.warning("- **Ubah Paragraf Menjadi Poin:** Rekruter hanya punya waktu 7 detik. Ubah deskripsi pengalaman kerja Anda dari bentuk paragraf panjang menjadi *bullet points*.")
+            st.error("Gagal membaca teks. Pastikan dokumen bukan hasil scan atau berbentuk gambar.")
