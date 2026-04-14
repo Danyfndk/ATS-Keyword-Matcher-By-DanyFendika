@@ -92,19 +92,18 @@ def audit_cv_final(text):
 # --- FUNGSI GENERATOR PDF (ENTERPRISE LAYOUT) ---
 class PDFReport(FPDF):
     def header(self):
-        self.set_font('Arial', 'B', 18) # Ukuran font sedikit disesuaikan agar proporsional
+        self.set_font('Arial', 'B', 18) 
         self.set_text_color(44, 62, 80) 
         self.cell(180, 8, 'CV AUDIT & ATS READINESS REPORT', 0, 1, 'C')
         self.set_font('Arial', 'I', 10)
         self.set_text_color(127, 140, 141) 
         self.cell(180, 5, f'Generated on: {datetime.now().strftime("%d %B %Y")}', 0, 1, 'C')
         
-        # --- PERBAIKAN JARAK UNDERLINE HEADER ---
-        self.ln(4) # Memberi jarak aman antara teks dan garis
+        self.ln(4) 
         self.set_draw_color(189, 195, 199)
-        y_position = self.get_y() # Mengambil titik kordinat Y yang akurat saat ini
-        self.line(15, y_position, 195, y_position) # Menggambar garis dengan kordinat rapi
-        self.ln(6) # Memberi jarak antara garis dan konten di bawahnya
+        y_position = self.get_y() 
+        self.line(15, y_position, 195, y_position) 
+        self.ln(6) 
 
     def footer(self):
         self.set_y(-25)
@@ -180,7 +179,6 @@ def create_pdf(report_data, raw_text):
     pdf.cell(180, 8, ' 2. PERFORMANCE METRICS & ANALYSIS', 0, 1, 'L', fill=True)
     pdf.ln(4)
     
-    # --- PERBAIKAN: Penambahan Paragraf Latar Belakang ---
     pdf.set_font('Arial', '', 9.5)
     pdf.set_text_color(60, 60, 60)
     intro_text = (
@@ -190,7 +188,6 @@ def create_pdf(report_data, raw_text):
     )
     pdf.multi_cell(180, 5, intro_text)
     pdf.ln(5)
-    # -----------------------------------------------------
 
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
@@ -239,20 +236,17 @@ def create_pdf(report_data, raw_text):
     pdf.set_text_color(20, 20, 20)
     
     if report_data['missing_sections']:
-        # Mengubah teks rekomendasi agar selaras dengan Note Box
         pdf.multi_cell(180, 5.5, f"[-] MISSING SECTIONS: Tambahkan 'Header Wajib' berikut agar mesin mudah memetakan data Anda: {', '.join(report_data['missing_sections']).title()}.")
     else:
         pdf.multi_cell(180, 5.5, "[+] STRUCTURE: Sangat baik. Seluruh 'Header Wajib' telah terdeteksi oleh sistem.")
         
     pdf.ln(3)
 
-    # --- PERBAIKAN: Kotak Catatan Header Wajib (UI/UX Clean) ---
-    pdf.set_fill_color(248, 250, 252) # Soft clear grey-blue
+    pdf.set_fill_color(248, 250, 252) 
     pdf.set_draw_color(200, 205, 210)
     pdf.set_font('Arial', 'B', 9)
     pdf.set_text_color(44, 62, 80)
     
-    # Border Box untuk Judul Catatan
     pdf.cell(180, 6, " CATATAN: Apa itu 'Header Wajib'?", border='LRT', ln=1, fill=True)
     pdf.set_font('Arial', '', 9)
     pdf.set_text_color(60, 60, 60)
@@ -265,7 +259,6 @@ def create_pdf(report_data, raw_text):
     )
     pdf.multi_cell(180, 5, info_pilar, border='LRB', fill=True)
     pdf.ln(4)
-    # ------------------------------------------------------------
 
     pdf.set_font('Arial', '', 10)
     pdf.set_text_color(20, 20, 20)
@@ -305,91 +298,98 @@ st.title("💼 CV Auditor & ATS Readiness")
 st.markdown("Evaluasi anatomi dokumen CV Anda berdasarkan standar global **Human Capital** dan **Mesin ATS**.")
 
 with st.container(border=True):
-    uploaded_file = st.file_uploader("Upload Dokumen CV (Hanya format PDF)", type=["pdf"])
+    # Menginformasikan ke pengguna bahwa batas maksimal adalah 1MB
+    uploaded_file = st.file_uploader("Upload Dokumen CV (Hanya format PDF - Maksimal 1MB)", type=["pdf"])
 
 if uploaded_file:
-    with st.spinner("Mesin sedang mengekstrak dan mengaudit dokumen..."):
-        with pdfplumber.open(uploaded_file) as pdf:
-            raw_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
-        
-        if raw_text:
-            res = audit_cv_final(raw_text)
+    # --- LOGIKA PEMBATASAN UKURAN FILE (1 MB) ---
+    MAX_FILE_SIZE = 1 * 1024 * 1024 # 1 MB dalam bytes
+    
+    if uploaded_file.size > MAX_FILE_SIZE:
+        st.error("⚠️ Ukuran file terlalu besar! Batas maksimal ukuran dokumen CV adalah 1MB. Silakan kompres CV Anda terlebih dahulu.")
+    else:
+        with st.spinner("Mesin sedang mengekstrak dan mengaudit dokumen..."):
+            with pdfplumber.open(uploaded_file) as pdf:
+                raw_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
             
-            st.write("") 
-            
-            # --- ROW 1: SCORE & MATRIX ---
-            col_chart, col_matrix = st.columns([1.2, 1])
-            
-            with col_chart:
+            if raw_text:
+                res = audit_cv_final(raw_text)
+                
+                st.write("") 
+                
+                # --- ROW 1: SCORE & MATRIX ---
+                col_chart, col_matrix = st.columns([1.2, 1])
+                
+                with col_chart:
+                    with st.container(border=True):
+                        st.markdown("<h4 style='text-align: center; color: #2C3E50;'>Overall ATS Score</h4>", unsafe_allow_html=True)
+                        fig = go.Figure(go.Indicator(
+                            mode = "gauge+number",
+                            value = res['final_score'],
+                            gauge = {
+                                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                                'bar': {'color': "#27ae60" if res['final_score'] >= 80 else "#f39c12" if res['final_score'] >= 50 else "#c0392b"},
+                                'bgcolor': "white",
+                                'borderwidth': 2,
+                                'bordercolor': "gray",
+                                'steps': [
+                                    {'range': [0, 49], 'color': "#fadbd8"},
+                                    {'range': [50, 79], 'color': "#fdebd0"},
+                                    {'range': [80, 100], 'color': "#d5f5e3"}]
+                            }
+                        ))
+                        fig.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10))
+                        st.plotly_chart(fig, use_container_width=True)
+
+                with col_matrix:
+                    with st.container(border=True):
+                        st.markdown("<h4 style='color: #2C3E50;'>Global Benchmark Matrix</h4>", unsafe_allow_html=True)
+                        st.success("**80% - 100% (Excellent)**\n\nFormat ideal, data kuat. Probabilitas tinggi lolos mesin ATS.")
+                        st.warning("**50% - 79% (Fair / Needs Optimization)**\n\nBerisiko. Strukturnya baik namun minim penggunaan kalimat ber-metrik.")
+                        st.error("**0% - 49% (Poor / High Risk)**\n\nRisiko tinggi auto-reject. Mesin gagal membaca data atau format rusak.")
+
+                # --- ROW 2: DETAILED SCORECARDS ---
+                st.markdown("<h4 style='color: #2C3E50; margin-top: 15px;'>Metrics Scorecards</h4>", unsafe_allow_html=True)
                 with st.container(border=True):
-                    st.markdown("<h4 style='text-align: center; color: #2C3E50;'>Overall ATS Score</h4>", unsafe_allow_html=True)
-                    fig = go.Figure(go.Indicator(
-                        mode = "gauge+number",
-                        value = res['final_score'],
-                        gauge = {
-                            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                            'bar': {'color': "#27ae60" if res['final_score'] >= 80 else "#f39c12" if res['final_score'] >= 50 else "#c0392b"},
-                            'bgcolor': "white",
-                            'borderwidth': 2,
-                            'bordercolor': "gray",
-                            'steps': [
-                                {'range': [0, 49], 'color': "#fadbd8"},
-                                {'range': [50, 79], 'color': "#fdebd0"},
-                                {'range': [80, 100], 'color': "#d5f5e3"}]
-                        }
-                    ))
-                    fig.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10))
-                    st.plotly_chart(fig, use_container_width=True)
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Keterbacaan Teks", f"{res['parsability_score']}%", help="Persentase teks yang berhasil diekstrak tanpa simbol rusak.")
+                    m2.metric("Kualitas Kalimat (XYZ)", f"{int(res['xyz_score'])}%", help="Rasio penggunaan Action Verb & Angka pada pengalaman kerja.")
+                    m3.metric("Data/Metrik Ditemukan", f"{res['metrics_count']}", help="Jumlah angka/persentase yang valid di dalam CV.")
+                    m4.metric("Estimasi Masa Kerja", f"± {res['total_tenure']} Thn", help="Perhitungan otomatis dari format tanggal di CV.")
 
-            with col_matrix:
-                with st.container(border=True):
-                    st.markdown("<h4 style='color: #2C3E50;'>Global Benchmark Matrix</h4>", unsafe_allow_html=True)
-                    st.success("**80% - 100% (Excellent)**\n\nFormat ideal, data kuat. Probabilitas tinggi lolos mesin ATS.")
-                    st.warning("**50% - 79% (Fair / Needs Optimization)**\n\nBerisiko. Strukturnya baik namun minim penggunaan kalimat ber-metrik.")
-                    st.error("**0% - 49% (Poor / High Risk)**\n\nRisiko tinggi auto-reject. Mesin gagal membaca data atau format rusak.")
+                # --- ROW 3: REPORT & X-RAY ---
+                st.write("")
+                col_dl, col_xray = st.columns([1, 1])
+                
+                with col_dl:
+                    with st.container(border=True):
+                        st.subheader("📄 Ekspor Laporan")
+                        st.markdown("Unduh hasil audit resmi (PDF) berisi rekomendasi dan tampilan X-Ray Vision.")
+                        
+                        st.write("") 
+                        st.write("") 
 
-            # --- ROW 2: DETAILED SCORECARDS ---
-            st.markdown("<h4 style='color: #2C3E50; margin-top: 15px;'>Metrics Scorecards</h4>", unsafe_allow_html=True)
-            with st.container(border=True):
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Keterbacaan Teks", f"{res['parsability_score']}%", help="Persentase teks yang berhasil diekstrak tanpa simbol rusak.")
-                m2.metric("Kualitas Kalimat (XYZ)", f"{int(res['xyz_score'])}%", help="Rasio penggunaan Action Verb & Angka pada pengalaman kerja.")
-                m3.metric("Data/Metrik Ditemukan", f"{res['metrics_count']}", help="Jumlah angka/persentase yang valid di dalam CV.")
-                m4.metric("Estimasi Masa Kerja", f"± {res['total_tenure']} Thn", help="Perhitungan otomatis dari format tanggal di CV.")
+                        pdf_bytes = create_pdf(res, raw_text)
+                        
+                        nama_file_asli = uploaded_file.name.rsplit('.', 1)[0]
+                        tanggal_sekarang = datetime.now().strftime('%d-%m-%Y')
+                        nama_file_download = f"{nama_file_asli}-{tanggal_sekarang}.pdf"
+                        
+                        st.download_button(
+                            label="⬇️ Download Enterprise PDF Report",
+                            data=pdf_bytes,
+                            file_name=nama_file_download,
+                            mime="application/pdf",
+                            type="primary",
+                            use_container_width=True
+                        )
+                
+                with col_xray:
+                    with st.container(border=True):
+                        st.subheader("🛠️ X-Ray Vision")
+                        with st.expander("Klik untuk melihat teks CV yang dibaca mesin", expanded=False):
+                            st.info("Jika teks di bawah berantakan atau menyatu antar kolom, sistem ATS juga akan membacanya demikian.")
+                            st.code(raw_text, language="text")
 
-            # --- ROW 3: REPORT & X-RAY ---
-            st.write("")
-            col_dl, col_xray = st.columns([1, 1])
-            
-            with col_dl:
-                with st.container(border=True):
-                    st.subheader("📄 Ekspor Laporan")
-                    st.markdown("Unduh hasil audit resmi (PDF) berisi rekomendasi dan tampilan X-Ray Vision.")
-                    
-                    st.write("") 
-                    st.write("") 
-
-                    pdf_bytes = create_pdf(res, raw_text)
-                    
-                    nama_file_asli = uploaded_file.name.rsplit('.', 1)[0]
-                    tanggal_sekarang = datetime.now().strftime('%d-%m-%Y')
-                    nama_file_download = f"{nama_file_asli}-{tanggal_sekarang}.pdf"
-                    
-                    st.download_button(
-                        label="⬇️ Download Enterprise PDF Report",
-                        data=pdf_bytes,
-                        file_name=nama_file_download,
-                        mime="application/pdf",
-                        type="primary",
-                        use_container_width=True
-                    )
-            
-            with col_xray:
-                with st.container(border=True):
-                    st.subheader("🛠️ X-Ray Vision")
-                    with st.expander("Klik untuk melihat teks CV yang dibaca mesin", expanded=False):
-                        st.info("Jika teks di bawah berantakan atau menyatu antar kolom, sistem ATS juga akan membacanya demikian.")
-                        st.code(raw_text, language="text")
-
-        else:
-            st.error("Gagal membaca teks. Pastikan dokumen bukan hasil scan atau berbentuk gambar.")
+            else:
+                st.error("Gagal membaca teks. Pastikan dokumen bukan hasil scan atau berbentuk gambar.")
