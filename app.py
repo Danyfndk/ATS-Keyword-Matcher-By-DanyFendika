@@ -45,12 +45,10 @@ def audit_cv_final(text):
     lines = text.split('\n')
     report = {}
 
-    # Parsability
     special_chars = len(re.findall(r'[^a-zA-Z0-9\s\.\,\@\+\-\(\)]', text))
     parsability = ((len(text) - special_chars) / len(text)) * 100 if len(text) > 0 else 0
     report['parsability_score'] = round(parsability, 1)
 
-    # Sections
     sections = {'Experience': r'experience|pengalaman', 'Education': r'education|pendidikan', 
                 'Skills': r'skills|keahlian', 'Summary': r'summary|profile|overview'}
     found_sec = [s for s, p in sections.items() if re.search(p, text_clean)]
@@ -58,7 +56,6 @@ def audit_cv_final(text):
     report['section_score'] = (len(found_sec) / len(sections)) * 100
     report['missing_sections'] = missing_sec
 
-    # XYZ & Metrics
     valid_lines = 0
     score_per_line = 0
     metrics = re.findall(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', text)
@@ -79,7 +76,6 @@ def audit_cv_final(text):
     report['metrics_count'] = len(metrics)
     report['total_tenure'] = calculate_tenure(text)
 
-    # Final Score Weighting
     final_score = (
         (report['parsability_score'] * 0.4) + 
         (min(report['xyz_score'] * 1.5, 100) * 0.3) + 
@@ -89,18 +85,17 @@ def audit_cv_final(text):
     report['final_score'] = round(final_score, 1)
     return report
 
-# --- FUNGSI GENERATOR PDF (ENTERPRISE LAYOUT) ---
+# --- FUNGSI GENERATOR PDF ---
 class PDFReport(FPDF):
     def header(self):
-        # Margin Kiri 15, Kanan 15. Usable width = 180
         self.set_font('Arial', 'B', 20)
-        self.set_text_color(44, 62, 80) # Navy Blue
+        self.set_text_color(44, 62, 80)
         self.cell(180, 10, 'CV AUDIT & ATS READINESS REPORT', 0, 1, 'C')
         self.set_font('Arial', 'I', 10)
-        self.set_text_color(127, 140, 141) # Gray
+        self.set_text_color(127, 140, 141)
         self.cell(180, 5, f'Generated on: {datetime.now().strftime("%d %B %Y")}', 0, 1, 'C')
         self.set_draw_color(189, 195, 199)
-        self.line(15, 28, 195, 28) # Garis rapi sesuai margin
+        self.line(15, 28, 195, 28)
         self.ln(10)
 
     def footer(self):
@@ -120,23 +115,20 @@ class PDFReport(FPDF):
 
 def create_pdf(report_data, raw_text):
     pdf = PDFReport(orientation='P', unit='mm', format='A4')
-    pdf.set_margins(15, 20, 15) # Set Margin RAPI & PRESISI
+    pdf.set_margins(15, 20, 15)
     pdf.set_auto_page_break(auto=True, margin=28)
     pdf.add_page()
     
     # --- 1. SCORECARD DASHBOARD ---
-    pdf.set_fill_color(236, 240, 241) # Light Cloud Gray
+    pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 8, ' 1. OVERALL ATS READINESS SCORE', 0, 1, 'L', fill=True)
     pdf.ln(5)
     
-    if report_data['final_score'] >= 80: 
-        pdf.set_text_color(39, 174, 96) # Green
-    elif report_data['final_score'] >= 50: 
-        pdf.set_text_color(230, 126, 34) # Orange/Yellow
-    else: 
-        pdf.set_text_color(192, 57, 43) # Red
+    if report_data['final_score'] >= 80: pdf.set_text_color(39, 174, 96)
+    elif report_data['final_score'] >= 50: pdf.set_text_color(230, 126, 34)
+    else: pdf.set_text_color(192, 57, 43)
         
     pdf.set_font('Arial', 'B', 34)
     pdf.cell(180, 15, f"{report_data['final_score']} / 100", 0, 1, 'C')
@@ -149,22 +141,22 @@ def create_pdf(report_data, raw_text):
     pdf.ln(1)
     
     pdf.set_font('Arial', 'B', 9)
-    pdf.set_draw_color(200, 200, 200) # Subtle border
-    # Row 1
-    pdf.set_fill_color(233, 247, 239) # Soft Green
+    pdf.set_draw_color(200, 200, 200)
+    
+    pdf.set_fill_color(233, 247, 239)
     pdf.cell(35, 7, ' 80% - 100%', border=1, align='C', fill=True)
     pdf.set_font('Arial', '', 9)
     pdf.set_text_color(20, 20, 20)
     pdf.cell(145, 7, ' EXCELLENT: Probabilitas tinggi lolos ATS. Format & struktur sangat ideal.', border=1, ln=1)
-    # Row 2
+    
     pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(253, 242, 233) # Soft Orange
+    pdf.set_fill_color(253, 242, 233)
     pdf.cell(35, 7, ' 50% - 79%', border=1, align='C', fill=True)
     pdf.set_font('Arial', '', 9)
     pdf.cell(145, 7, ' FAIR: Berisiko. Perlu perbaikan kualitas kalimat dan metrik data.', border=1, ln=1)
-    # Row 3
+    
     pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(250, 224, 228) # Soft Red
+    pdf.set_fill_color(250, 224, 228)
     pdf.cell(35, 7, ' 0% - 49%', border=1, align='C', fill=True)
     pdf.set_font('Arial', '', 9)
     pdf.cell(145, 7, ' POOR: Risiko tinggi auto-reject. Format rusak atau minim data.', border=1, ln=1)
@@ -177,76 +169,106 @@ def create_pdf(report_data, raw_text):
     pdf.cell(180, 8, ' 2. PERFORMANCE METRICS & ANALYSIS', 0, 1, 'L', fill=True)
     pdf.ln(4)
     
-    # A. Parsability
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"A. ATS Parsability (Text Readability) : {report_data['parsability_score']}%", 0, 1)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(127, 140, 141)
-    pdf.multi_cell(180, 4.5, "Note: Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari desain 2 kolom atau penggunaan tabel.")
+    pdf.multi_cell(180, 4.5, "Note: Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS.")
     pdf.ln(4)
 
-    # B. XYZ Score
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"B. Kualitas Kalimat (Google XYZ Score) : {int(report_data['xyz_score'])}%", 0, 1)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(127, 140, 141)
     xyz_note = (
-        "Note: Standar XYZ memadukan [Action Verb] + [Konteks] + [Metrik]. Sistem memberikan Poin Parsial (50%) "
-        "jika kalimat Anda memiliki Action Verb namun tanpa angka. Skor 0% terjadi jika kalimat naratif pasif murni."
+        f"Note: Skor ini adalah rasio dari seluruh kalimat panjang di CV Anda. {int(report_data['xyz_score'])}% berarti "
+        "hanya sebagian kecil dari deskripsi kerja Anda yang memenuhi formula [Action Verb + Angka]. "
+        "Sistem mengevaluasi tiap kalimat: Poin penuh (1) jika ada verb+angka, Poin Parsial (0.5) jika hanya salah satu, "
+        "dan Poin 0 jika hanya narasi pasif."
     )
     pdf.multi_cell(180, 4.5, xyz_note)
     pdf.ln(4)
 
-    # C. Metrik 
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"C. Quantifiable Metrics: {report_data['metrics_count']} Data Points Found", 0, 1)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(127, 140, 141)
-    pdf.multi_cell(180, 4.5, "Note: Jumlah metrik (angka/persentase) di CV Anda sebagai bukti pencapaian kerja yang nyata.")
+    metric_note = (
+        f"Note: Ditemukan {report_data['metrics_count']} angka/persentase di CV Anda. Idealnya, CV profesional "
+        "memiliki 10-20+ metrik yang fokus pada hasil nyata, bukan sekadar tahun kerja (contoh ideal: 'Meningkatkan penjualan 20%')."
+    )
+    pdf.multi_cell(180, 4.5, metric_note)
     pdf.ln(4)
 
-    # D. Tenure
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"D. Est. Career Tenure: {report_data['total_tenure']} Years", 0, 1)
-    pdf.set_font('Arial', 'I', 9)
-    pdf.set_text_color(127, 140, 141)
-    pdf.multi_cell(180, 4.5, "Note: Masa kerja yang berhasil dikalkulasi otomatis oleh mesin dari format tanggal riwayat kerja Anda.")
     pdf.ln(6)
 
-    # --- 4. RECOMMENDATIONS ---
+    # --- 4. RECOMMENDATIONS & INDUSTRY STANDARDS ---
     pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 8, ' 3. STRATEGIC RECOMMENDATIONS', 0, 1, 'L', fill=True)
+    pdf.cell(180, 8, ' 3. DIAGNOSTIC FINDINGS & INDUSTRY STANDARDS', 0, 1, 'L', fill=True)
     pdf.ln(4)
     
-    pdf.set_font('Arial', '', 10)
+    # A. Struktur CV
+    pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(20, 20, 20)
+    pdf.cell(180, 5, "I. KELENGKAPAN STRUKTUR (HEADER WAJIB)", 0, 1)
+    pdf.set_font('Arial', '', 10)
     if report_data['missing_sections']:
-        pdf.multi_cell(180, 5.5, f"[-] MISSING SECTIONS: Tambahkan header standar berikut agar mesin mudah memetakan data Anda: {', '.join(report_data['missing_sections'])}.")
+        pdf.set_text_color(192, 57, 43)
+        pdf.multi_cell(180, 5.5, f"[-] MISSING SECTIONS: Tambahkan judul bagian berikut: {', '.join(report_data['missing_sections'])}.")
     else:
+        pdf.set_text_color(39, 174, 96)
         pdf.multi_cell(180, 5.5, "[+] STRUCTURE: Sangat baik. Seluruh header wajib telah terdeteksi oleh sistem.")
-        
-    pdf.ln(2)
+    
+    # Note Edukasi Header
+    pdf.set_font('Arial', 'I', 9)
+    pdf.set_text_color(100, 100, 100)
+    header_info = (
+        "INFO ATS: Mesin memetakan data Anda melalui 'Header' (Judul Bagian). Berdasarkan standar global "
+        "Human Capital, sebuah CV wajib memiliki 4 pilar utama ini secara eksplisit: (1) Summary (Profil Singkat), "
+        "(2) Experience (Pengalaman Kerja), (3) Education (Pendidikan), dan (4) Skills (Keahlian)."
+    )
+    pdf.multi_cell(180, 4.5, header_info)
+    pdf.ln(4)
+
+    # B. Konten Kalimat
+    pdf.set_font('Arial', 'B', 10)
+    pdf.set_text_color(20, 20, 20)
+    pdf.cell(180, 5, "II. KUALITAS KONTEN (GOOGLE XYZ FORMULA)", 0, 1)
+    pdf.set_font('Arial', '', 10)
     if report_data['xyz_score'] < 50:
-        pdf.multi_cell(180, 5.5, "[-] CONTENT: Kalimat di pengalaman kerja Anda kurang kuat. Masukkan lebih banyak angka/persentase untuk menjelaskan dampak pekerjaan Anda.")
+        pdf.set_text_color(192, 57, 43)
+        pdf.multi_cell(180, 5.5, "[-] CONTENT: Kalimat deskripsi kerja Anda kurang kuat. Masukkan lebih banyak angka pencapaian.")
     else:
+        pdf.set_text_color(39, 174, 96)
         pdf.multi_cell(180, 5.5, "[+] CONTENT: Penggunaan Action Verbs dan Metrik kuantitatif sudah cukup baik.")
+    
+    # Note Edukasi XYZ
+    pdf.set_font('Arial', 'I', 9)
+    pdf.set_text_color(100, 100, 100)
+    xyz_info = (
+        "INFO ATS: Skor Anda dihitung dari rasio kalimat efektif. Kalimat yang murni pasif diberi nilai 0. "
+        "Untuk menaikkan skor, ubah gaya bahasa tugas harian menjadi pencapaian dengan menyematkan metrik."
+    )
+    pdf.multi_cell(180, 4.5, xyz_info)
 
     # --- HALAMAN 2: X-RAY VISION ---
     pdf.add_page()
-    pdf.set_fill_color(44, 62, 80) # Navy Blue for X-Ray
+    pdf.set_fill_color(44, 62, 80)
     pdf.set_font('Arial', 'B', 12)
-    pdf.set_text_color(255, 255, 255) # White
+    pdf.set_text_color(255, 255, 255)
     pdf.cell(180, 10, ' X-RAY VISION: RAW DATA EXTRACTION (SYSTEM VIEW)', 0, 1, 'C', fill=True)
     pdf.ln(6)
 
     pdf.set_font('Arial', 'B', 9)
-    pdf.set_text_color(192, 57, 43) # Red Warning
+    pdf.set_text_color(192, 57, 43)
     xray_warning = (
         "WARNING: Teks di bawah ini adalah tampilan MENTAH (Raw Text) bagaimana sistem ATS membaca CV Anda. "
         "Jika teks terlihat berantakan, melompat, atau menyatu tanpa spasi (biasa terjadi pada CV desain 2 kolom/tabel), "
@@ -255,16 +277,15 @@ def create_pdf(report_data, raw_text):
     pdf.multi_cell(180, 5, xray_warning)
     pdf.ln(4)
 
-    # Kotak Teks Mentah
     safe_raw_text = raw_text.encode('latin-1', 'replace').decode('latin-1')
     pdf.set_font('Courier', '', 8.5)
     pdf.set_text_color(50, 50, 50)
-    pdf.set_fill_color(248, 249, 249) # Sangat abu-abu muda
+    pdf.set_fill_color(248, 249, 249)
     pdf.multi_cell(180, 4.5, safe_raw_text[:3500] + ("\n\n[...TEXT TRUNCATED...]" if len(safe_raw_text) > 3500 else ""), fill=True)
 
     return bytes(pdf.output(dest='S'))
 
-# --- UI STREAMLIT (ENTERPRISE DASHBOARD STYLE) ---
+# --- UI STREAMLIT ---
 st.title("💼 CV Auditor & ATS Readiness")
 st.markdown("Evaluasi anatomi dokumen CV Anda berdasarkan standar global **Human Capital** dan **Mesin ATS**.")
 
@@ -278,12 +299,10 @@ if uploaded_file:
         
         if raw_text:
             res = audit_cv_final(raw_text)
+            st.write("") 
             
-            st.write("") # Spacing
-            
-            # --- ROW 1: SCORE & MATRIX (DENGAN PERBAIKAN TINGGI PRESISI) ---
+            # --- ROW 1: SCORE & MATRIX ---
             col_chart, col_matrix = st.columns([1.2, 1])
-            
             with col_chart:
                 with st.container(border=True):
                     st.markdown("<h4 style='text-align: center; color: #2C3E50;'>Overall ATS Score</h4>", unsafe_allow_html=True)
@@ -302,7 +321,6 @@ if uploaded_file:
                                 {'range': [80, 100], 'color': "#d5f5e3"}]
                         }
                     ))
-                    # --- PERBAIKAN: Tinggi gauge dikurangi (dari 250 ke 230) agar kontainer sejajar sempurna ---
                     fig.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10))
                     st.plotly_chart(fig, use_container_width=True)
 
@@ -310,31 +328,52 @@ if uploaded_file:
                 with st.container(border=True):
                     st.markdown("<h4 style='color: #2C3E50;'>Global Benchmark Matrix</h4>", unsafe_allow_html=True)
                     st.success("**80% - 100% (Excellent)**\n\nFormat ideal, data kuat. Probabilitas tinggi lolos mesin ATS.")
-                    st.warning("**50% - 79% (Fair / Needs Optimization)**\n\nBerisiko. Strukturnya baik namun minim penggunaan kalimat ber-metrik.")
+                    st.warning("**50% - 79% (Fair / Needs Optimization)**\n\nBerisiko. Strukturnya baik namun minim metrik angka.")
                     st.error("**0% - 49% (Poor / High Risk)**\n\nRisiko tinggi auto-reject. Mesin gagal membaca data atau format rusak.")
 
             # --- ROW 2: DETAILED SCORECARDS ---
             st.markdown("<h4 style='color: #2C3E50; margin-top: 15px;'>Metrics Scorecards</h4>", unsafe_allow_html=True)
             with st.container(border=True):
                 m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Keterbacaan Teks", f"{res['parsability_score']}%", help="Persentase teks yang berhasil diekstrak tanpa simbol rusak.")
-                m2.metric("Kualitas Kalimat (XYZ)", f"{int(res['xyz_score'])}%", help="Rasio penggunaan Action Verb & Angka pada pengalaman kerja.")
-                m3.metric("Data/Metrik Ditemukan", f"{res['metrics_count']}", help="Jumlah angka/persentase yang valid di dalam CV.")
+                m1.metric("Keterbacaan Teks", f"{res['parsability_score']}%", help="Persentase teks yang diekstrak dengan aman.")
+                
+                # --- UPDATE HELP TEXT STREAMLIT ---
+                m2.metric("Kualitas Kalimat (XYZ)", f"{int(res['xyz_score'])}%", help=f"Skor Rasio: {int(res['xyz_score'])}% dari total deskripsi kerja Anda menggunakan format [Action Verb + Angka]. Sisanya adalah narasi pasif.")
+                m3.metric("Data/Metrik Ditemukan", f"{res['metrics_count']}", help=f"Ditemukan {res['metrics_count']} angka. Idealnya 10-20+ metrik yang berfokus pada hasil (bukan sekadar tahun).")
                 m4.metric("Estimasi Masa Kerja", f"± {res['total_tenure']} Thn", help="Perhitungan otomatis dari format tanggal di CV.")
 
-            # --- ROW 3: REPORT & X-RAY (DENGAN PERBAIKAN TINGGI PRESISI) ---
+            # --- ROW 3: DIAGNOSTIC & INDUSTRY STANDARDS ---
+            st.markdown("<h4 style='color: #2C3E50; margin-top: 15px;'>Diagnostic Findings & Industry Standards</h4>", unsafe_allow_html=True)
+            with st.container(border=True):
+                c_diag1, c_diag2 = st.columns(2)
+                
+                with c_diag1:
+                    st.markdown("**1. Standar 4 Pilar Header (Struktur CV)**")
+                    if res['missing_sections']:
+                        st.error(f"[-] MISSING: {', '.join(res['missing_sections'])}")
+                    else:
+                        st.success("[+] STRUCTURE: Seluruh header wajib telah terdeteksi.")
+                    
+                    st.info("💡 **Info ATS:** Berdasarkan standar global *Human Capital*, sebuah CV wajib memiliki 4 pilar utama ini secara eksplisit: **Summary**, **Experience**, **Education**, dan **Skills**.")
+
+                with c_diag2:
+                    st.markdown("**2. Standar Kualitas Kalimat (Google XYZ Formula)**")
+                    if res['xyz_score'] < 50:
+                        st.error("[-] CONTENT: Kalimat Anda kurang kuat. Masukkan lebih banyak angka pencapaian.")
+                    else:
+                        st.success("[+] CONTENT: Penggunaan Action Verbs dan Metrik sudah baik.")
+                    
+                    st.info(f"💡 **Info ATS:** Sistem ini membedah setiap kalimat Anda. Skor {int(res['xyz_score'])}% menandakan rasio kalimat efektif Anda. Sistem menerapkan Penilaian Parsial (50% Poin) jika kalimat Anda hanya punya Action Verb namun tanpa metrik hasil.")
+
+            # --- ROW 4: REPORT & X-RAY ---
             st.write("")
             col_dl, col_xray = st.columns([1, 1])
-            
             with col_dl:
                 with st.container(border=True):
                     st.subheader("📄 Ekspor Laporan")
                     st.markdown("Unduh hasil audit resmi (PDF) berisi rekomendasi dan tampilan X-Ray Vision.")
-                    
-                    # --- PERBAIKAN: Menambahkan spasi kosong untuk menambah tinggi alami kontainer kiri agar sejajar dengan kontainer kanan ---
-                    st.write("") # Spasi kosong 1
-                    st.write("") # Spasi kosong 2
-
+                    st.write("") 
+                    st.write("") 
                     pdf_bytes = create_pdf(res, raw_text)
                     st.download_button(
                         label="⬇️ Download Enterprise PDF Report",
