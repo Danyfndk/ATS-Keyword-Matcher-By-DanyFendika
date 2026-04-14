@@ -3,11 +3,13 @@ import pdfplumber
 import re
 import nltk
 import plotly.graph_objects as go
+import time
+from collections import Counter
 from datetime import datetime
 from fpdf import FPDF
 
 # --- KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="CV Auditor & ATS Readiness", page_icon="📑", layout="wide")
+st.set_page_config(page_title="CV Auditor & ATS Readiness", page_icon="💼", layout="wide")
 
 # --- INISIALISASI DATA NLP ---
 @st.cache_resource
@@ -26,6 +28,16 @@ def setup_nlp():
     return set(action_verbs)
 
 ACTION_VERBS = setup_nlp()
+
+# --- FUNGSI EKSTRAKSI KATA KUNCI (FITUR BARU) ---
+def get_top_keywords(text):
+    # Membuang kata hubung umum (Bahasa & English)
+    stop_words = {'yang', 'dan', 'di', 'dari', 'untuk', 'pada', 'dengan', 'ini', 'itu', 'sebagai', 'dalam', 'of', 'and', 'to', 'in', 'for', 'with', 'on', 'at', 'by', 'an', 'the', 'is', 'are', 'was', 'were', 'saya', 'kami', 'akan', 'bisa', 'dapat', 'tidak', 'ke', 'ada', 'atau', 'have', 'has', 'had', 'been', 'will', 'can', 'not', 'or', 'about', 'your', 'my', 'we', 'they', 'experience', 'pengalaman', 'education', 'pendidikan', 'skills', 'keahlian', 'summary', 'profile', 'work', 'kerja'}
+    words = re.findall(r'\b[a-z]{4,}\b', text.lower())
+    filtered = [w for w in words if w not in stop_words]
+    counts = Counter(filtered)
+    # Mengambil 8 kata terbanyak
+    return [word.title() for word, _ in counts.most_common(8)]
 
 # --- FUNGSI UTAMA AUDITOR ---
 def calculate_tenure(text):
@@ -117,6 +129,10 @@ def audit_cv_final(text, num_pages):
         final_score -= 15  
         
     report['final_score'] = min(max(round(final_score, 1), 0), 100)
+    
+    # Menambahkan Keywords ke report dict
+    report['top_keywords'] = get_top_keywords(text)
+    
     return report
 
 # --- FUNGSI GENERATOR PDF ---
@@ -206,9 +222,7 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.ln(8)
     
     # --- SMART PAGE BREAK CHECK ---
-    # Jika sisa halaman di bawah 80mm, lompat ke halaman baru agar rapi
-    if pdf.get_y() > 200: 
-        pdf.add_page()
+    if pdf.get_y() > 200: pdf.add_page()
 
     # --- 3. DETAILED METRICS ---
     pdf.set_fill_color(236, 240, 241)
@@ -226,7 +240,6 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 5, intro_text)
     pdf.ln(5)
 
-    # A. Parsability
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"A. ATS Parsability (Text Readability) : {report_data['parsability_score']}%", 0, 1)
@@ -235,7 +248,6 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 4.5, "Note: Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari tabel/2 kolom.")
     pdf.ln(3)
 
-    # B. XYZ Score
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"B. Kualitas Kalimat (Google XYZ Score) : {int(report_data['xyz_score'])}%", 0, 1)
@@ -244,7 +256,6 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 4.5, "Note: Standar XYZ memadukan [Action Verb] + [Konteks] + [Metrik]. Skor 0% terjadi jika kalimat naratif pasif murni.")
     pdf.ln(3)
 
-    # C. Metrics
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"C. Quantifiable Metrics: {report_data['metrics_count']} Data Points Found", 0, 1)
@@ -253,7 +264,6 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 4.5, "Note: Bukti pencapaian nyata. Contoh ideal: 'Memimpin 15 staf', 'Efisiensi 20%', atau 'Budget Rp500 juta'.")
     pdf.ln(3)
 
-    # D. Tenure (DIKEMBALIKAN KE PDF)
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"D. Est. Career Tenure: {report_data['total_tenure']} Years", 0, 1)
@@ -262,7 +272,6 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 4.5, "Note: Masa kerja yang berhasil dikalkulasi otomatis oleh mesin dari format riwayat kerja Anda.")
     pdf.ln(3)
 
-    # E. Pages
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 5, f"E. Document Format: {report_data['pages']} Pages", 0, 1)
@@ -272,9 +281,7 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.ln(6)
 
     # --- SMART PAGE BREAK CHECK ---
-    # Memastikan bagian Diagnostic Result tidak terpotong canggung (Orphan text)
-    if pdf.get_y() > 215: 
-        pdf.add_page()
+    if pdf.get_y() > 215: pdf.add_page()
 
     # --- 4. DIAGNOSTIC RESULTS & ANALYSIS ---
     pdf.set_fill_color(236, 240, 241)
@@ -328,9 +335,7 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 5, xray_warning)
     pdf.ln(4)
 
-    # --- RAW TEXT SANITIZER (Membersihkan Spasi/Enter Berlebih) ---
     safe_raw_text = raw_text.encode('latin-1', 'replace').decode('latin-1')
-    # Mengubah 3 atau lebih baris kosong (enter) menjadi maksimal 2 baris kosong saja agar padat
     safe_raw_text = re.sub(r'\n{3,}', '\n\n', safe_raw_text)
     
     pdf.set_font('Courier', '', 8.5)
@@ -353,15 +358,28 @@ if uploaded_file:
     if uploaded_file.size > MAX_FILE_SIZE:
         st.error("⚠️ Ukuran file terlalu besar! Batas maksimal ukuran dokumen CV adalah 200MB.")
     else:
-        with st.spinner("Mesin sedang mengekstrak dan mengaudit dokumen..."):
+        # --- FITUR EMAS 1: Enterprise Deep-Scan Animation ---
+        with st.status("🔍 Menginisialisasi Mesin ATS...", expanded=True) as status:
             try:
+                st.write("📄 Mengekstrak teks dari dokumen PDF...")
+                time.sleep(0.6) # Memberikan efek dramatis
                 with pdfplumber.open(uploaded_file) as pdf:
                     num_pages = len(pdf.pages) 
                     raw_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
                 
+                st.write("🧬 Menganalisis struktur dan anatomi CV...")
+                time.sleep(0.6)
+                
                 if raw_text.strip():
+                    st.write("🧮 Menghitung metrik dan Google XYZ Score...")
+                    time.sleep(0.6)
                     res = audit_cv_final(raw_text, num_pages) 
                     nama_file_asli = uploaded_file.name.rsplit('.', 1)[0]
+                    
+                    st.write("📝 Menyusun Laporan Diagnostik...")
+                    time.sleep(0.5)
+                    status.update(label="✅ Audit Selesai!", state="complete", expanded=False)
+                    st.toast('Sistem berhasil mengaudit CV Anda!', icon='🎉') # Pop-up Notifikasi
                     
                     st.write("") 
                     
@@ -410,7 +428,6 @@ if uploaded_file:
 
                     # --- ROW 2: SCORECARDS (5 METRIK) ---
                     with st.container(border=True):
-                        # Kita jadikan 5 kolom agar selaras dengan 5 Metrik A-E di PDF
                         m1, m2, m3, m4, m5 = st.columns(5)
                         m1.metric("Keterbacaan", f"{res['parsability_score']}%")
                         m2.metric("Skor XYZ", f"{int(res['xyz_score'])}%")
@@ -430,6 +447,18 @@ if uploaded_file:
                         else: st.error("**Status: POOR.** Risiko tinggi auto-reject. Mesin gagal membaca data atau format rusak.")
                         
                         st.divider()
+
+                        # --- FITUR EMAS 2: ATS Keyword Mapping (Skills Badges) ---
+                        st.markdown("##### 📌 ATS Keyword Mapping")
+                        st.write("Mesin mengekstrak **Top 8 Keywords** (Kata Kunci Dominan) dari CV Anda. Jika kata kunci ini tidak relevan dengan kualifikasi lowongan yang dituju, peluang lolos sangat kecil.")
+                        if res['top_keywords']:
+                            html_keywords = " ".join([f"<span style='background-color: #e8f4f8; color: #2980b9; padding: 5px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; margin-right: 8px; border: 1px solid #b3d7ff; display: inline-block; margin-bottom: 8px;'>{k}</span>" for k in res['top_keywords']])
+                            st.markdown(html_keywords, unsafe_allow_html=True)
+                        else:
+                            st.write("*Tidak cukup kata kunci yang dapat dideteksi.*")
+                        
+                        st.divider()
+                        # --------------------------------------------------------
                         
                         if res['missing_sections']: st.error(f"**[-] Missing Sections:** ATS gagal mendeteksi bagian: {', '.join(res['missing_sections']).title()}.")
                         else: st.info("**[+] Structure:** Sangat baik. Seluruh 4 pilar wajib telah terdeteksi.")
@@ -456,12 +485,13 @@ if uploaded_file:
                     with tab3:
                         st.markdown("### Ekstraksi Data Mentah")
                         st.info("Jika teks di bawah berantakan atau menyatu antar kolom, sistem ATS juga akan membacanya demikian.")
-                        # Merapikan tampilan Streamlit X-Ray
                         clean_display_text = re.sub(r'\n{3,}', '\n\n', raw_text)
                         st.code(clean_display_text, language="text")
 
                 else:
+                    status.update(label="❌ Audit Gagal", state="error", expanded=True)
                     st.warning("⚠️ Dokumen kosong atau berisi gambar/scan yang tidak dapat dibaca oleh mesin ATS. Pastikan Anda mengunggah CV format PDF teks (Text-based).")
             
             except Exception as e:
+                status.update(label="❌ Terjadi Kesalahan", state="error", expanded=True)
                 st.error("⚠️ Sistem gagal membaca dokumen. Pastikan file PDF tidak rusak dan tidak diproteksi oleh password.")
