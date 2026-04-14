@@ -9,7 +9,7 @@ from fpdf import FPDF
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="CV Auditor & ATS Readiness", page_icon="📑", layout="wide")
 
-# --- INISIALISASI DATA ---
+# --- INISIALISASI DATA NLP ---
 @st.cache_resource
 def setup_nlp():
     nltk.download('punkt', quiet=True)
@@ -23,11 +23,11 @@ def setup_nlp():
         'assist', 'assisted', 'monitor', 'monitored', 'oversee', 'oversaw', 'maintain', 'maintained',
         'membangun', 'memimpin', 'mengelola', 'mengembangkan', 'meningkatkan', 'menganalisis'
     ]
-    return action_verbs
+    return set(action_verbs) # Diubah ke Set agar pencarian (lookup) lebih cepat (O(1))
 
 ACTION_VERBS = setup_nlp()
 
-# --- FUNGSI UTAMA AUDITOR ---
+# --- FUNGSI UTAMA AUDITOR (COMMERCIAL LOGIC) ---
 def calculate_tenure(text):
     year_patterns = re.findall(r'(\b20\d{2}\b)\s*[\-\–]\s*(\b20\d{2}\b|present|now|current)', text.lower())
     total_years = 0
@@ -36,7 +36,7 @@ def calculate_tenure(text):
         start_yr = int(start)
         end_yr = current_year if end in ['present', 'now', 'current'] else int(end)
         diff = end_yr - start_yr
-        if 0 < diff < 40:
+        if 0 < diff < 40: # Logika batas wajar masa kerja
             total_years += diff
     return total_years
 
@@ -45,46 +45,51 @@ def audit_cv_final(text, num_pages):
     lines = text.split('\n')
     report = {}
 
-    # 1. Parsability
-    special_chars = len(re.findall(r'[^a-zA-Z0-9\s\.\,\@\+\-\(\)]', text))
+    # 1. Parsability (FIXED: Whitelist simbol-simbol wajar dalam CV seperti bullet points dll)
+    special_chars = len(re.findall(r'[^\w\s\.\,\@\+\-\(\)\/\:\&\|\%\•\▪\●\*]', text))
     parsability = ((len(text) - special_chars) / len(text)) * 100 if len(text) > 0 else 0
-    report['parsability_score'] = round(parsability, 1)
+    report['parsability_score'] = min(max(round(parsability, 1), 0), 100) # Memastikan skor selalu 0-100
 
-    # 2. Sections
-    sections = {'Experience': r'experience|pengalaman', 'Education': r'education|pendidikan', 
-                'Skills': r'skills|keahlian', 'Summary': r'summary|profile|overview'}
+    # 2. Sections Header
+    sections = {'Experience': r'\b(experience|pengalaman)\b', 'Education': r'\b(education|pendidikan)\b', 
+                'Skills': r'\b(skills|keahlian)\b', 'Summary': r'\b(summary|profile|overview)\b'}
     found_sec = [s for s, p in sections.items() if re.search(p, text_clean)]
     missing_sec = [s for s in sections.keys() if s not in found_sec]
     report['section_score'] = (len(found_sec) / len(sections)) * 100
     report['missing_sections'] = missing_sec
 
-    # 3. XYZ & Metrics
+    # 3. XYZ & Metrics (FIXED: Hitung metrik secara independen PER BARIS)
     valid_lines = 0
     score_per_line = 0
-    metrics = re.findall(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', text)
+    global_metrics = re.findall(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', text) # Hitung total metrik di dokumen
     
     for line in lines:
         clean_line = line.strip().lower()
-        if len(clean_line) > 30: 
+        if len(clean_line) > 30: # Asumsi panjang 1 kalimat deskripsi
             valid_lines += 1
             words_in_line = set(re.findall(r'\b\w+\b', clean_line))
-            has_verb = any(verb in words_in_line for verb in ACTION_VERBS)
-            has_metric = any(m in clean_line for m in metrics)
             
-            if has_verb and has_metric: score_per_line += 1.0
-            elif has_verb: score_per_line += 0.5
-            elif has_metric: score_per_line += 0.5
+            has_verb = any(verb in words_in_line for verb in ACTION_VERBS)
+            has_metric = bool(re.search(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', clean_line)) # Evaluasi metrik tepat di baris ini
+            
+            if has_verb and has_metric: 
+                score_per_line += 1.0
+            elif has_verb: 
+                score_per_line += 0.5
+            elif has_metric: 
+                score_per_line += 0.5
                 
-    report['xyz_score'] = (score_per_line / valid_lines * 100) if valid_lines > 0 else 0
-    report['metrics_count'] = len(metrics)
+    report['xyz_score'] = min(max(round((score_per_line / valid_lines * 100) if valid_lines > 0 else 0, 1), 0), 100)
+    report['metrics_count'] = len(global_metrics)
     report['total_tenure'] = calculate_tenure(text)
 
     # 4. Page Length
     report['pages'] = num_pages
 
-    # 5. Contact Info Parsing
+    # 5. Contact Info Parsing (FIXED: Regex anti false-positive dengan range tahun)
     email_found = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', text)
-    phone_found = re.search(r'\+?\d[\d\-\s]{8,15}\d', text)
+    # Regex telepon yang mencari standar +62/08 atau standar internasional yang rapat
+    phone_found = re.search(r'(\+?([0-9]{1,3})?[ \-\.]?)?(\(0?[0-9]{2,4}\)|0?[0-9]{2,4})[ \-\.]?[0-9]{3,4}[ \-\.]?[0-9]{3,4}', text)
     linkedin_found = re.search(r'linkedin\.com/in/[a-zA-Z0-9_-]+', text_clean)
     
     report['contact_info'] = {
@@ -97,7 +102,7 @@ def audit_cv_final(text, num_pages):
     final_score = (
         (report['parsability_score'] * 0.4) + 
         (min(report['xyz_score'] * 1.5, 100) * 0.3) + 
-        (min(len(metrics) * 10, 100) * 0.2) + 
+        (min(len(global_metrics) * 10, 100) * 0.2) + 
         (report['section_score'] * 0.1)
     )
     
@@ -107,7 +112,7 @@ def audit_cv_final(text, num_pages):
     if not report['contact_info']['Email'] or not report['contact_info']['Phone']:
         final_score -= 15  
         
-    report['final_score'] = max(round(final_score, 1), 0) 
+    report['final_score'] = min(max(round(final_score, 1), 0), 100) # Safeguard bounds (0-100)
     return report
 
 # --- FUNGSI GENERATOR PDF (ENTERPRISE LAYOUT) ---
@@ -250,56 +255,38 @@ def create_pdf(report_data, raw_text):
     pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(44, 62, 80)
-    # PERUBAHAN JUDUL DITERAPKAN DI SINI
     pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & ANALYSIS', 0, 1, 'L', fill=True)
     pdf.ln(4)
     
     pdf.set_font('Arial', '', 10)
     pdf.set_text_color(20, 20, 20)
     
-    # Rekomendasi Section
+    # 1. Struktur / Section (Teks sudah dirapikan sesuai standar pilar)
     if report_data['missing_sections']:
-        pdf.multi_cell(180, 5.5, f"[-] MISSING SECTIONS: Tambahkan 'Header Wajib' berikut agar mesin mudah memetakan data Anda: {', '.join(report_data['missing_sections']).title()}.")
+        pdf.multi_cell(180, 5.5, f"[-] MISSING SECTIONS: ATS gagal mendeteksi bagian: {', '.join(report_data['missing_sections']).title()}. Standar global mewajibkan 4 pilar utama CV: Summary (Profil), Experience (Pengalaman), Education (Pendidikan), dan Skills (Keahlian).")
     else:
-        pdf.multi_cell(180, 5.5, "[+] STRUCTURE: Sangat baik. Seluruh 'Header Wajib' telah terdeteksi oleh sistem.")
+        pdf.multi_cell(180, 5.5, "[+] STRUCTURE: Sangat baik. Seluruh 4 pilar wajib (Summary, Experience, Education, Skills) telah terdeteksi oleh sistem.")
     pdf.ln(2)
 
-    # Rekomendasi Contact Info & Page Limit
+    # 2. Konten / XYZ
+    if report_data['xyz_score'] < 50:
+        pdf.multi_cell(180, 5.5, "[-] CONTENT: Kalimat pengalaman kerja kurang kuat. Gunakan format Action Verb + Konteks + Metrik (Angka/Persentase) untuk mendeskripsikan dampak pekerjaan.")
+    else:
+        pdf.multi_cell(180, 5.5, "[+] CONTENT: Penggunaan Action Verbs dan metrik kuantitatif pada pengalaman kerja sudah sangat baik.")
+    pdf.ln(2)
+
+    # 3. Kontak
     missing_contacts = [k for k, v in report_data['contact_info'].items() if not v]
     if missing_contacts:
-        pdf.multi_cell(180, 5.5, f"[-] CONTACT INFO: ATS gagal mendeteksi kontak berikut: {', '.join(missing_contacts)}. Pastikan format kontak standar dan tidak menggunakan ikon/gambar.")
+        pdf.multi_cell(180, 5.5, f"[-] CONTACT INFO: ATS gagal membaca kontak: {', '.join(missing_contacts)}. Pastikan menggunakan teks standar, hindari penggunaan ikon/gambar tanpa keterangan teks.")
     else:
-        pdf.multi_cell(180, 5.5, "[+] CONTACT INFO: Valid. Email, Telepon, dan profil LinkedIn berhasil terdeteksi oleh mesin.")
+        pdf.multi_cell(180, 5.5, "[+] CONTACT INFO: Valid. Email, Telepon, dan tautan LinkedIn berhasil diekstrak dengan baik.")
     pdf.ln(2)
         
+    # 4. Limit Halaman
     if report_data['pages'] > 2:
-        pdf.multi_cell(180, 5.5, f"[-] PAGE LIMIT WARNING: CV Anda memiliki {report_data['pages']} halaman. Pertimbangkan untuk memadatkan menjadi 1-2 halaman untuk mengoptimalkan skor ATS.")
+        pdf.multi_cell(180, 5.5, f"[-] PAGE LIMIT: CV Anda memiliki {report_data['pages']} halaman. Pertimbangkan untuk memadatkan informasi menjadi maksimal 1-2 halaman agar lebih efektif.")
     pdf.ln(3)
-
-    pdf.set_fill_color(248, 250, 252) 
-    pdf.set_draw_color(200, 205, 210)
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_text_color(44, 62, 80)
-    
-    pdf.cell(180, 6, " CATATAN: Apa itu 'Header Wajib'?", border='LRT', ln=1, fill=True)
-    pdf.set_font('Arial', '', 9)
-    pdf.set_text_color(60, 60, 60)
-    info_pilar = (
-        "Dalam standar global Human Capital, sebuah CV yang siap tembus ATS harus memiliki 4 pilar atau bagian utama:\n"
-        " 1. Summary (Profil Singkat)\n"
-        " 2. Experience (Riwayat/Pengalaman Kerja)\n"
-        " 3. Education (Pendidikan)\n"
-        " 4. Skills (Keahlian)"
-    )
-    pdf.multi_cell(180, 5, info_pilar, border='LRB', fill=True)
-    pdf.ln(4)
-
-    pdf.set_font('Arial', '', 10)
-    pdf.set_text_color(20, 20, 20)
-    if report_data['xyz_score'] < 50:
-        pdf.multi_cell(180, 5.5, "[-] CONTENT: Kalimat di pengalaman kerja Anda kurang kuat. Masukkan lebih banyak angka/persentase untuk menjelaskan dampak pekerjaan Anda.")
-    else:
-        pdf.multi_cell(180, 5.5, "[+] CONTENT: Penggunaan Action Verbs dan Metrik kuantitatif sudah cukup baik.")
 
     # --- HALAMAN 2: X-RAY VISION ---
     pdf.add_page()
