@@ -40,17 +40,17 @@ def calculate_tenure(text):
             total_years += diff
     return total_years
 
-def audit_cv_final(text):
+def audit_cv_final(text, num_pages):
     text_clean = text.lower()
     lines = text.split('\n')
     report = {}
 
-    # Parsability
+    # 1. Parsability
     special_chars = len(re.findall(r'[^a-zA-Z0-9\s\.\,\@\+\-\(\)]', text))
     parsability = ((len(text) - special_chars) / len(text)) * 100 if len(text) > 0 else 0
     report['parsability_score'] = round(parsability, 1)
 
-    # Sections
+    # 2. Sections
     sections = {'Experience': r'experience|pengalaman', 'Education': r'education|pendidikan', 
                 'Skills': r'skills|keahlian', 'Summary': r'summary|profile|overview'}
     found_sec = [s for s, p in sections.items() if re.search(p, text_clean)]
@@ -58,7 +58,7 @@ def audit_cv_final(text):
     report['section_score'] = (len(found_sec) / len(sections)) * 100
     report['missing_sections'] = missing_sec
 
-    # XYZ & Metrics
+    # 3. XYZ & Metrics
     valid_lines = 0
     score_per_line = 0
     metrics = re.findall(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', text)
@@ -79,6 +79,20 @@ def audit_cv_final(text):
     report['metrics_count'] = len(metrics)
     report['total_tenure'] = calculate_tenure(text)
 
+    # 4. Page Length
+    report['pages'] = num_pages
+
+    # 5. Contact Info Parsing
+    email_found = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', text)
+    phone_found = re.search(r'\+?\d[\d\-\s]{8,15}\d', text)
+    linkedin_found = re.search(r'linkedin\.com/in/[a-zA-Z0-9_-]+', text_clean)
+    
+    report['contact_info'] = {
+        'Email': bool(email_found),
+        'Phone': bool(phone_found),
+        'LinkedIn': bool(linkedin_found)
+    }
+
     # Final Score Weighting
     final_score = (
         (report['parsability_score'] * 0.4) + 
@@ -86,7 +100,14 @@ def audit_cv_final(text):
         (min(len(metrics) * 10, 100) * 0.2) + 
         (report['section_score'] * 0.1)
     )
-    report['final_score'] = round(final_score, 1)
+    
+    # Pengurangan skor untuk pelanggaran fatal standar global
+    if report['pages'] > 2:
+        final_score -= 10  
+    if not report['contact_info']['Email'] or not report['contact_info']['Phone']:
+        final_score -= 15  
+        
+    report['final_score'] = max(round(final_score, 1), 0) 
     return report
 
 # --- FUNGSI GENERATOR PDF (ENTERPRISE LAYOUT) ---
@@ -219,27 +240,40 @@ def create_pdf(report_data, raw_text):
 
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 5, f"D. Est. Career Tenure: {report_data['total_tenure']} Years", 0, 1)
+    pdf.cell(180, 5, f"D. Document Format: {report_data['pages']} Pages", 0, 1)
     pdf.set_font('Arial', 'I', 9)
     pdf.set_text_color(127, 140, 141)
-    pdf.multi_cell(180, 4.5, "Note: Masa kerja yang berhasil dikalkulasi otomatis oleh mesin dari format tanggal riwayat kerja Anda.")
+    pdf.multi_cell(180, 4.5, "Note: Standar panjang dokumen resume profesional global adalah 1 hingga maksimal 2 halaman.")
     pdf.ln(6)
 
-    # --- 4. RECOMMENDATIONS ---
+    # --- 4. DIAGNOSTIC RESULTS & ANALYSIS ---
     pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 8, ' 3. STRATEGIC RECOMMENDATIONS', 0, 1, 'L', fill=True)
+    # PERUBAHAN JUDUL DITERAPKAN DI SINI
+    pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & ANALYSIS', 0, 1, 'L', fill=True)
     pdf.ln(4)
     
     pdf.set_font('Arial', '', 10)
     pdf.set_text_color(20, 20, 20)
     
+    # Rekomendasi Section
     if report_data['missing_sections']:
         pdf.multi_cell(180, 5.5, f"[-] MISSING SECTIONS: Tambahkan 'Header Wajib' berikut agar mesin mudah memetakan data Anda: {', '.join(report_data['missing_sections']).title()}.")
     else:
         pdf.multi_cell(180, 5.5, "[+] STRUCTURE: Sangat baik. Seluruh 'Header Wajib' telah terdeteksi oleh sistem.")
+    pdf.ln(2)
+
+    # Rekomendasi Contact Info & Page Limit
+    missing_contacts = [k for k, v in report_data['contact_info'].items() if not v]
+    if missing_contacts:
+        pdf.multi_cell(180, 5.5, f"[-] CONTACT INFO: ATS gagal mendeteksi kontak berikut: {', '.join(missing_contacts)}. Pastikan format kontak standar dan tidak menggunakan ikon/gambar.")
+    else:
+        pdf.multi_cell(180, 5.5, "[+] CONTACT INFO: Valid. Email, Telepon, dan profil LinkedIn berhasil terdeteksi oleh mesin.")
+    pdf.ln(2)
         
+    if report_data['pages'] > 2:
+        pdf.multi_cell(180, 5.5, f"[-] PAGE LIMIT WARNING: CV Anda memiliki {report_data['pages']} halaman. Pertimbangkan untuk memadatkan menjadi 1-2 halaman untuk mengoptimalkan skor ATS.")
     pdf.ln(3)
 
     pdf.set_fill_color(248, 250, 252) 
@@ -298,22 +332,21 @@ st.title("💼 CV Auditor & ATS Readiness")
 st.markdown("Evaluasi anatomi dokumen CV Anda berdasarkan standar global **Human Capital** dan **Mesin ATS**.")
 
 with st.container(border=True):
-    # Menginformasikan ke pengguna bahwa batas maksimal adalah 1MB
     uploaded_file = st.file_uploader("Upload Dokumen CV (Hanya format PDF - Maksimal 1MB)", type=["pdf"])
 
 if uploaded_file:
-    # --- LOGIKA PEMBATASAN UKURAN FILE (1 MB) ---
-    MAX_FILE_SIZE = 1 * 1024 * 1024 # 1 MB dalam bytes
+    MAX_FILE_SIZE = 1 * 1024 * 1024 
     
     if uploaded_file.size > MAX_FILE_SIZE:
         st.error("⚠️ Ukuran file terlalu besar! Batas maksimal ukuran dokumen CV adalah 1MB. Silakan kompres CV Anda terlebih dahulu.")
     else:
         with st.spinner("Mesin sedang mengekstrak dan mengaudit dokumen..."):
             with pdfplumber.open(uploaded_file) as pdf:
+                num_pages = len(pdf.pages) 
                 raw_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
             
             if raw_text:
-                res = audit_cv_final(raw_text)
+                res = audit_cv_final(raw_text, num_pages) 
                 
                 st.write("") 
                 
@@ -354,8 +387,10 @@ if uploaded_file:
                     m1, m2, m3, m4 = st.columns(4)
                     m1.metric("Keterbacaan Teks", f"{res['parsability_score']}%", help="Persentase teks yang berhasil diekstrak tanpa simbol rusak.")
                     m2.metric("Kualitas Kalimat (XYZ)", f"{int(res['xyz_score'])}%", help="Rasio penggunaan Action Verb & Angka pada pengalaman kerja.")
-                    m3.metric("Data/Metrik Ditemukan", f"{res['metrics_count']}", help="Jumlah angka/persentase yang valid di dalam CV.")
-                    m4.metric("Estimasi Masa Kerja", f"± {res['total_tenure']} Thn", help="Perhitungan otomatis dari format tanggal di CV.")
+                    
+                    missing_c = sum(value == False for value in res['contact_info'].values())
+                    m3.metric("Kelengkapan Kontak", f"{3 - missing_c}/3", help="Deteksi keberadaan Email, Nomor HP, dan Profil LinkedIn.")
+                    m4.metric("Jumlah Halaman", f"{res['pages']} Hal", help="Standar CV profesional adalah 1 - 2 Halaman.")
 
                 # --- ROW 3: REPORT & X-RAY ---
                 st.write("")
