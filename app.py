@@ -37,17 +37,26 @@ def get_top_keywords(text):
     counts = Counter(filtered)
     return [word.title() for word, _ in counts.most_common(8)]
 
-# --- FUNGSI UTAMA AUDITOR ---
+# --- FUNGSI UTAMA AUDITOR (IMPROVED TENURE CALCULATION) ---
 def calculate_tenure(text):
-    year_patterns = re.findall(r'(\b20\d{2}\b)\s*[\-\–]\s*(\b20\d{2}\b|present|now|current)', text.lower())
+    # REGEX BARU: Mentolerir jarak hingga 20 karakter untuk melewati nama bulan & simbol aneh, serta menambahkan deteksi 'saat ini' / 'sekarang'
+    year_patterns = re.findall(r'(\b20\d{2}\b).{1,20}?(\b20\d{2}\b|present|now|current|saat\s*ini|sekarang)', text.lower())
     total_years = 0
     current_year = datetime.now().year
+    
     for start, end in year_patterns:
         start_yr = int(start)
-        end_yr = current_year if end in ['present', 'now', 'current'] else int(end)
+        
+        # Pengecekan kondisi "Present/Saat ini"
+        if 'saat' in end or 'sekarang' in end or end in ['present', 'now', 'current']:
+            end_yr = current_year
+        else:
+            end_yr = int(end)
+            
         diff = end_yr - start_yr
         if 0 < diff < 40:
             total_years += diff
+            
     return total_years
 
 def audit_cv_final(text, num_pages):
@@ -134,7 +143,6 @@ def audit_cv_final(text, num_pages):
 # --- FUNGSI GENERATOR PDF (PREMIUM CONSULTING LAYOUT) ---
 class PDFReport(FPDF):
     def header(self):
-        # Premium Confidential Tag
         self.set_font('Arial', 'B', 8)
         self.set_text_color(192, 57, 43) 
         self.cell(180, 4, 'CONFIDENTIAL - FOR CANDIDATE EVALUATION ONLY', 0, 1, 'C')
@@ -178,10 +186,9 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf = PDFReport(orientation='P', unit='mm', format='A4')
     pdf.doc_name = doc_name 
     pdf.set_margins(15, 20, 15) 
-    pdf.set_auto_page_break(auto=True, margin=25) # Margin bawah diperketat
+    pdf.set_auto_page_break(auto=True, margin=25) 
     pdf.add_page()
 
-    # Fungsi Helper Anti-Orphaned Text
     def safe_page_break(required_space):
         if pdf.get_y() > (297 - 25 - required_space):
             pdf.add_page()
@@ -229,7 +236,7 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.ln(8)
     
     # --- 3. DETAILED METRICS ---
-    safe_page_break(50) # Cek ruang kosong sebelum mulai blok metrik
+    safe_page_break(50) 
     pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(44, 62, 80)
@@ -303,13 +310,13 @@ def create_pdf(report_data, raw_text, doc_name):
     safe_page_break(20)
     pdf.set_font('Arial', 'B', 10)
     if report_data['missing_sections']:
-        pdf.set_text_color(192, 57, 43) # Merah
+        pdf.set_text_color(192, 57, 43) 
         pdf.cell(180, 5, "[ACTION NEEDED] - Document Structure", 0, 1)
         pdf.set_font('Arial', '', 10)
         pdf.set_text_color(20, 20, 20)
         pdf.multi_cell(180, 5.5, f"ATS gagal mendeteksi bagian: {', '.join(report_data['missing_sections']).title()}. Standar global mewajibkan 4 pilar utama: Summary, Experience, Education, dan Skills.")
     else:
-        pdf.set_text_color(39, 174, 96) # Hijau
+        pdf.set_text_color(39, 174, 96) 
         pdf.cell(180, 5, "[EXCELLENT] - Document Structure", 0, 1)
         pdf.set_font('Arial', '', 10)
         pdf.set_text_color(20, 20, 20)
@@ -333,10 +340,10 @@ def create_pdf(report_data, raw_text, doc_name):
         pdf.multi_cell(180, 5.5, "Penggunaan Action Verbs dan metrik kuantitatif pada pengalaman kerja sudah sangat baik.")
     pdf.ln(3)
 
-    # [3] ATS Keyword Mapping (Insight Eksklusif)
+    # [3] ATS Keyword Mapping
     safe_page_break(20)
     pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(41, 128, 185) # Biru Insight
+    pdf.set_text_color(41, 128, 185) 
     pdf.cell(180, 5, "[INSIGHT] - ATS Keyword Mapping", 0, 1)
     pdf.set_font('Arial', '', 10)
     pdf.set_text_color(20, 20, 20)
@@ -366,7 +373,7 @@ def create_pdf(report_data, raw_text, doc_name):
     if report_data['pages'] > 2:
         safe_page_break(20)
         pdf.set_font('Arial', 'B', 10)
-        pdf.set_text_color(230, 126, 34) # Oranye (Warning)
+        pdf.set_text_color(230, 126, 34) 
         pdf.cell(180, 5, "[WARNING] - Page Limit Exceeded", 0, 1)
         pdf.set_font('Arial', '', 10)
         pdf.set_text_color(20, 20, 20)
@@ -374,7 +381,7 @@ def create_pdf(report_data, raw_text, doc_name):
         pdf.ln(3)
 
     # --- HALAMAN 2: X-RAY VISION ---
-    pdf.add_page() # Memaksa X-Ray selalu di halaman paling baru (bersih)
+    pdf.add_page() 
     pdf.set_fill_color(44, 62, 80) 
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(255, 255, 255) 
@@ -392,7 +399,7 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.ln(4)
 
     safe_raw_text = raw_text.encode('latin-1', 'replace').decode('latin-1')
-    safe_raw_text = re.sub(r'\n{3,}', '\n\n', safe_raw_text) # Sanitasi whitespace panjang
+    safe_raw_text = re.sub(r'\n{3,}', '\n\n', safe_raw_text) 
     
     pdf.set_font('Courier', '', 8.5)
     pdf.set_text_color(50, 50, 50)
