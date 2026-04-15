@@ -37,17 +37,15 @@ def get_top_keywords(text):
     counts = Counter(filtered)
     return [word.title() for word, _ in counts.most_common(8)]
 
-# --- FUNGSI UTAMA AUDITOR (IMPROVED TENURE CALCULATION) ---
+# --- FUNGSI UTAMA AUDITOR ---
 def calculate_tenure(text):
-    # REGEX BARU: Mentolerir jarak hingga 20 karakter untuk melewati nama bulan & simbol aneh, serta menambahkan deteksi 'saat ini' / 'sekarang'
+    # Regex yang sudah disempurnakan untuk membaca format penanggalan CV Indonesia
     year_patterns = re.findall(r'(\b20\d{2}\b).{1,20}?(\b20\d{2}\b|present|now|current|saat\s*ini|sekarang)', text.lower())
     total_years = 0
     current_year = datetime.now().year
     
     for start, end in year_patterns:
         start_yr = int(start)
-        
-        # Pengecekan kondisi "Present/Saat ini"
         if 'saat' in end or 'sekarang' in end or end in ['present', 'now', 'current']:
             end_yr = current_year
         else:
@@ -143,9 +141,10 @@ def audit_cv_final(text, num_pages):
 # --- FUNGSI GENERATOR PDF (PREMIUM CONSULTING LAYOUT) ---
 class PDFReport(FPDF):
     def header(self):
+        # Premium Confidential Tag
         self.set_font('Arial', 'B', 8)
         self.set_text_color(192, 57, 43) 
-        self.cell(180, 4, 'CONFIDENTIAL - FOR CANDIDATE EVALUATION ONLY', 0, 1, 'C')
+        self.cell(180, 4, 'CONFIDENTIAL REPORT - FOR CANDIDATE EVALUATION ONLY', 0, 1, 'C')
         self.ln(2)
 
         self.set_font('Arial', 'B', 18) 
@@ -174,7 +173,7 @@ class PDFReport(FPDF):
         self.set_y(-22)
         self.set_font('Arial', 'I', 8)
         self.set_text_color(127, 140, 141)
-        self.cell(180, 4, 'Strictly evaluated based on enterprise ATS standards and Google XYZ Formula.', 0, 1, 'C')
+        self.cell(180, 4, 'System Algorithm based on Global Enterprise ATS Standards & Google XYZ Formula.', 0, 1, 'C')
         self.set_font('Arial', 'B', 9)
         self.set_text_color(44, 62, 80)
         self.cell(180, 5, 'Audit Conducted by: Dany Fendika - ATS Readiness Specialist & HR Data Analyst', 0, 1, 'C')
@@ -200,187 +199,159 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.cell(180, 8, ' 1. OVERALL ATS READINESS SCORE', 0, 1, 'L', fill=True)
     pdf.ln(5)
     
-    if report_data['final_score'] >= 80: pdf.set_text_color(39, 174, 96) 
-    elif report_data['final_score'] >= 50: pdf.set_text_color(230, 126, 34) 
-    else: pdf.set_text_color(192, 57, 43) 
+    if report_data['final_score'] >= 80: 
+        pdf.set_text_color(39, 174, 96)
+        status_text = "EXCELLENT"
+        exec_summary = "Laporan ini menunjukkan bahwa CV Anda berada di level EXCELLENT. Struktur dan format dapat dibaca sempurna oleh mesin ATS. Anda juga memiliki kekuatan narasi metrik yang solid. Peluang dokumen Anda lolos screening otomatis sangat tinggi."
+    elif report_data['final_score'] >= 50: 
+        pdf.set_text_color(230, 126, 34) 
+        status_text = "FAIR / NEEDS OPTIMIZATION"
+        exec_summary = "Laporan ini menunjukkan bahwa CV Anda berada di level FAIR. Mesin ATS berhasil mendeteksi format Anda, namun narasi pengalaman kerja Anda masih terlalu pasif. Anda kehilangan poin penting pada aspek kuantifikasi data."
+    else: 
+        pdf.set_text_color(192, 57, 43) 
+        status_text = "POOR / HIGH RISK"
+        exec_summary = "Laporan ini menunjukkan status POOR (Risiko Tinggi). Terdapat kesalahan fatal pada format atau struktur CV Anda yang membuat mesin ATS gagal mengekstrak informasi penting. Perbaikan menyeluruh sangat direkomendasikan."
         
     pdf.set_font('Arial', 'B', 34)
-    pdf.cell(180, 15, f"{report_data['final_score']} / 100", 0, 1, 'C')
+    pdf.cell(180, 12, f"{report_data['final_score']} / 100", 0, 1, 'C')
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(180, 6, f"STATUS: {status_text}", 0, 1, 'C')
+    pdf.ln(4)
+
+    # Executive Summary (Nilai Jual Consulting)
+    pdf.set_font('Arial', 'I', 10)
+    pdf.set_text_color(60, 60, 60)
+    pdf.multi_cell(180, 5, f"Executive Summary: {exec_summary}")
     pdf.ln(6)
     
-    # --- 2. GLOBAL BENCHMARK MATRIX ---
-    pdf.set_font('Arial', 'B', 11)
-    pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 6, 'GLOBAL ATS BENCHMARK MATRIX:', 0, 1, 'L')
-    pdf.ln(1)
-    
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_draw_color(200, 200, 200) 
-    pdf.set_fill_color(233, 247, 239) 
-    pdf.cell(35, 7, ' 80% - 100%', border=1, align='C', fill=True)
-    pdf.set_font('Arial', '', 9)
-    pdf.set_text_color(20, 20, 20)
-    pdf.cell(145, 7, ' EXCELLENT: Probabilitas tinggi lolos ATS. Format & struktur sangat ideal.', border=1, ln=1)
-    
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(253, 242, 233) 
-    pdf.cell(35, 7, ' 50% - 79%', border=1, align='C', fill=True)
-    pdf.set_font('Arial', '', 9)
-    pdf.cell(145, 7, ' FAIR: Berisiko. Perlu perbaikan kualitas kalimat dan metrik data.', border=1, ln=1)
-    
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(250, 224, 228) 
-    pdf.cell(35, 7, ' 0% - 49%', border=1, align='C', fill=True)
-    pdf.set_font('Arial', '', 9)
-    pdf.cell(145, 7, ' POOR: Risiko tinggi auto-reject. Format rusak atau minim data.', border=1, ln=1)
-    pdf.ln(8)
-    
-    # --- 3. DETAILED METRICS ---
+    # --- 2. DETAILED METRICS ---
     safe_page_break(50) 
     pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 8, ' 2. PERFORMANCE METRICS & ANALYSIS', 0, 1, 'L', fill=True)
     pdf.ln(4)
-    
-    pdf.set_font('Arial', '', 9.5)
-    pdf.set_text_color(60, 60, 60)
-    intro_text = (
-        "Lima metrik di bawah ini dievaluasi berdasarkan standar rekrutmen global dan algoritma Applicant "
-        "Tracking System (ATS). Sistem memvalidasi integritas format, narasi, dan kuantifikasi data Anda."
-    )
-    pdf.multi_cell(180, 5, intro_text)
-    pdf.ln(5)
 
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 5, f"A. ATS Parsability (Text Readability) : {report_data['parsability_score']}%", 0, 1)
-    pdf.set_font('Arial', 'I', 9)
-    pdf.set_text_color(127, 140, 141)
-    pdf.multi_cell(180, 4.5, "Note: Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari tabel/2 kolom.")
-    pdf.ln(3)
+    # Metrik dipecah menjadi desain garis bawah yang elegan
+    metrics_data = [
+        ("A. ATS Parsability (Text Readability)", f"{report_data['parsability_score']}%", "Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari tabel/2 kolom."),
+        ("B. Kualitas Kalimat (Google XYZ Score)", f"{int(report_data['xyz_score'])}%", "Standar XYZ: [Action Verb] + [Konteks] + [Metrik]. Skor 0% terjadi jika kalimat naratif pasif murni."),
+        ("C. Quantifiable Metrics", f"{report_data['metrics_count']} Data Points", "Bukti pencapaian nyata. Contoh ideal: 'Memimpin 15 staf', 'Efisiensi 20%', atau 'Budget Rp500 juta'."),
+        ("D. Est. Career Tenure", f"{report_data['total_tenure']} Years", "Masa kerja yang berhasil dikalkulasi otomatis oleh mesin dari format riwayat kerja Anda."),
+        ("E. Document Format", f"{report_data['pages']} Pages", "Standar panjang dokumen resume profesional global adalah 1 hingga maksimal 2 halaman.")
+    ]
 
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 5, f"B. Kualitas Kalimat (Google XYZ Score) : {int(report_data['xyz_score'])}%", 0, 1)
-    pdf.set_font('Arial', 'I', 9)
-    pdf.set_text_color(127, 140, 141)
-    xyz_note = (
-        "Note: Standar XYZ memadukan [Action Verb] + [Konteks] + [Metrik]. Skor 0% terjadi jika kalimat naratif pasif murni."
-    )
-    pdf.multi_cell(180, 4.5, xyz_note)
-    pdf.ln(3)
+    for title, score, note in metrics_data:
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_text_color(44, 62, 80)
+        pdf.cell(130, 5, title, 0, 0, 'L')
+        pdf.cell(50, 5, score, 0, 1, 'R')
+        pdf.set_font('Arial', 'I', 9)
+        pdf.set_text_color(127, 140, 141)
+        pdf.multi_cell(180, 4.5, f"Note: {note}")
+        pdf.set_draw_color(236, 240, 241)
+        pdf.line(15, pdf.get_y()+1, 195, pdf.get_y()+1)
+        pdf.ln(3)
 
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 5, f"C. Quantifiable Metrics: {report_data['metrics_count']} Data Points Found", 0, 1)
-    pdf.set_font('Arial', 'I', 9)
-    pdf.set_text_color(127, 140, 141)
-    metric_note = (
-        "Note: Bukti pencapaian nyata. Contoh ideal: 'Memimpin 15 staf', 'Efisiensi 20%', atau 'Budget Rp500 juta'."
-    )
-    pdf.multi_cell(180, 4.5, metric_note)
-    pdf.ln(3)
+    pdf.ln(4)
 
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 5, f"D. Est. Career Tenure: {report_data['total_tenure']} Years", 0, 1)
-    pdf.set_font('Arial', 'I', 9)
-    pdf.set_text_color(127, 140, 141)
-    pdf.multi_cell(180, 4.5, "Note: Masa kerja yang berhasil dikalkulasi otomatis oleh mesin dari format riwayat kerja Anda.")
-    pdf.ln(3)
-
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 5, f"E. Document Format: {report_data['pages']} Pages", 0, 1)
-    pdf.set_font('Arial', 'I', 9)
-    pdf.set_text_color(127, 140, 141)
-    pdf.multi_cell(180, 4.5, "Note: Standar panjang dokumen resume profesional global adalah 1 hingga maksimal 2 halaman.")
-    pdf.ln(6)
-
-    # --- 4. DIAGNOSTIC RESULTS & ANALYSIS ---
-    safe_page_break(30)
+    # --- 3. DIAGNOSTIC RESULTS (CARD UI DESIGN) ---
+    safe_page_break(40)
     pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(44, 62, 80)
-    pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & ANALYSIS', 0, 1, 'L', fill=True)
+    pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & FEEDBACK', 0, 1, 'L', fill=True)
     pdf.ln(4)
     
     # [1] Pilar Struktur
-    safe_page_break(20)
-    pdf.set_font('Arial', 'B', 10)
+    safe_page_break(25)
     if report_data['missing_sections']:
+        pdf.set_fill_color(253, 237, 236) # Soft Red Background
         pdf.set_text_color(192, 57, 43) 
-        pdf.cell(180, 5, "[ACTION NEEDED] - Document Structure", 0, 1)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(180, 6, " [ACTION NEEDED] - Document Structure", 0, 1, 'L', fill=True)
         pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(20, 20, 20)
-        pdf.multi_cell(180, 5.5, f"ATS gagal mendeteksi bagian: {', '.join(report_data['missing_sections']).title()}. Standar global mewajibkan 4 pilar utama: Summary, Experience, Education, dan Skills.")
+        pdf.set_text_color(40, 40, 40)
+        pdf.multi_cell(180, 5.5, f"ATS gagal mendeteksi bagian: {', '.join(report_data['missing_sections']).title()}. Standar global mewajibkan 4 pilar utama: Summary, Experience, Education, dan Skills.", fill=True)
     else:
+        pdf.set_fill_color(234, 250, 241) # Soft Green Background
         pdf.set_text_color(39, 174, 96) 
-        pdf.cell(180, 5, "[EXCELLENT] - Document Structure", 0, 1)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(180, 6, " [EXCELLENT] - Document Structure", 0, 1, 'L', fill=True)
         pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(20, 20, 20)
-        pdf.multi_cell(180, 5.5, "Sangat baik. Seluruh 4 pilar wajib (Summary, Experience, Education, Skills) telah terdeteksi oleh sistem.")
-    pdf.ln(3)
+        pdf.set_text_color(40, 40, 40)
+        pdf.multi_cell(180, 5.5, "Sangat baik. Seluruh 4 pilar wajib (Summary, Experience, Education, Skills) telah terdeteksi sempurna oleh sistem.", fill=True)
+    pdf.ln(4)
 
     # [2] Kualitas Konten
-    safe_page_break(20)
-    pdf.set_font('Arial', 'B', 10)
+    safe_page_break(25)
+    verb_text = f" (Kata kerja Anda yang terdeteksi: {', '.join(report_data['extracted_verbs']).title()})" if report_data['extracted_verbs'] else ""
     if report_data['xyz_score'] < 50:
+        pdf.set_fill_color(253, 237, 236)
         pdf.set_text_color(192, 57, 43)
-        pdf.cell(180, 5, "[ACTION NEEDED] - Content Quality & Impact", 0, 1)
-        pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(20, 20, 20)
-        pdf.multi_cell(180, 5.5, "Kalimat pengalaman kerja kurang kuat. Gunakan format Action Verb + Konteks + Metrik (Angka/Persentase) untuk mendeskripsikan dampak pekerjaan.")
-    else:
-        pdf.set_text_color(39, 174, 96)
-        pdf.cell(180, 5, "[EXCELLENT] - Content Quality & Impact", 0, 1)
-        pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(20, 20, 20)
-        pdf.multi_cell(180, 5.5, "Penggunaan Action Verbs dan metrik kuantitatif pada pengalaman kerja sudah sangat baik.")
-    pdf.ln(3)
-
-    # [3] ATS Keyword Mapping
-    safe_page_break(20)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_text_color(41, 128, 185) 
-    pdf.cell(180, 5, "[INSIGHT] - ATS Keyword Mapping", 0, 1)
-    pdf.set_font('Arial', '', 10)
-    pdf.set_text_color(20, 20, 20)
-    kw_str = ", ".join(report_data['top_keywords']).title() if report_data['top_keywords'] else "Tidak cukup data."
-    pdf.multi_cell(180, 5.5, f"Top kata kunci yang diekstrak mesin dari CV Anda: {kw_str}. Pastikan kata kunci ini relevan dengan kualifikasi posisi yang Anda lamar.")
-    pdf.ln(3)
-
-    # [4] Informasi Kontak
-    safe_page_break(20)
-    pdf.set_font('Arial', 'B', 10)
-    missing_contacts = [k for k, v in report_data['contact_info'].items() if not v]
-    if missing_contacts:
-        pdf.set_text_color(192, 57, 43)
-        pdf.cell(180, 5, "[ACTION NEEDED] - Contact Information", 0, 1)
-        pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(20, 20, 20)
-        pdf.multi_cell(180, 5.5, f"ATS gagal membaca kontak: {', '.join(missing_contacts)}. Pastikan menggunakan teks standar, hindari penggunaan ikon/gambar tanpa keterangan teks.")
-    else:
-        pdf.set_text_color(39, 174, 96)
-        pdf.cell(180, 5, "[EXCELLENT] - Contact Information", 0, 1)
-        pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(20, 20, 20)
-        pdf.multi_cell(180, 5.5, "Valid. Email, Telepon, dan tautan LinkedIn berhasil diekstrak dengan baik.")
-    pdf.ln(3)
-        
-    # [5] Limit Halaman
-    if report_data['pages'] > 2:
-        safe_page_break(20)
         pdf.set_font('Arial', 'B', 10)
-        pdf.set_text_color(230, 126, 34) 
-        pdf.cell(180, 5, "[WARNING] - Page Limit Exceeded", 0, 1)
+        pdf.cell(180, 6, " [ACTION NEEDED] - Content Quality & Impact", 0, 1, 'L', fill=True)
         pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(20, 20, 20)
-        pdf.multi_cell(180, 5.5, f"CV Anda memiliki {report_data['pages']} halaman. Pertimbangkan untuk memadatkan informasi menjadi maksimal 1-2 halaman agar lebih efektif.")
-        pdf.ln(3)
+        pdf.set_text_color(40, 40, 40)
+        pdf.multi_cell(180, 5.5, f"Kalimat pengalaman kerja kurang berdampak. Gunakan format Action Verb + Konteks + Metrik (Angka) untuk mendeskripsikan hasil kerja.{verb_text}", fill=True)
+    else:
+        pdf.set_fill_color(234, 250, 241)
+        pdf.set_text_color(39, 174, 96)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(180, 6, " [EXCELLENT] - Content Quality & Impact", 0, 1, 'L', fill=True)
+        pdf.set_font('Arial', '', 10)
+        pdf.set_text_color(40, 40, 40)
+        pdf.multi_cell(180, 5.5, f"Penggunaan Action Verbs dan metrik kuantitatif pada pengalaman kerja sudah sangat tangguh.{verb_text}", fill=True)
+    pdf.ln(4)
 
-    # --- HALAMAN 2: X-RAY VISION ---
+    # [3] ATS Keyword Mapping (Insight Eksklusif)
+    safe_page_break(25)
+    pdf.set_fill_color(235, 245, 251) # Soft Blue Background
+    pdf.set_text_color(41, 128, 185) 
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(180, 6, " [INSIGHT] - Top ATS Keyword Mapping", 0, 1, 'L', fill=True)
+    pdf.set_font('Arial', '', 10)
+    pdf.set_text_color(40, 40, 40)
+    kw_str = ", ".join(report_data['top_keywords']).title() if report_data['top_keywords'] else "Tidak cukup data."
+    pdf.multi_cell(180, 5.5, f"Kata kunci dominan yang diekstrak mesin dari CV Anda: {kw_str}. Pastikan kata kunci ini relevan dengan kualifikasi loker incaran Anda.", fill=True)
+    pdf.ln(4)
+
+    # [4] Informasi Kontak & Halaman
+    safe_page_break(25)
+    missing_contacts = [k for k, v in report_data['contact_info'].items() if not v]
+    page_warning = f" CV Anda melebihi batas (Miliki {report_data['pages']} halaman, direkomendasikan maksimal 2)." if report_data['pages'] > 2 else ""
+    
+    if missing_contacts or page_warning:
+        pdf.set_fill_color(254, 245, 231) # Soft Orange
+        pdf.set_text_color(211, 84, 0)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(180, 6, " [WARNING] - Formatting & Contact Details", 0, 1, 'L', fill=True)
+        pdf.set_font('Arial', '', 10)
+        pdf.set_text_color(40, 40, 40)
+        warn_text = ""
+        if missing_contacts: warn_text += f"ATS gagal membaca kontak: {', '.join(missing_contacts)}. Gunakan teks standar tanpa menyematkan teks di dalam icon gambar. "
+        warn_text += page_warning
+        pdf.multi_cell(180, 5.5, warn_text, fill=True)
+    else:
+        pdf.set_fill_color(234, 250, 241)
+        pdf.set_text_color(39, 174, 96)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.cell(180, 6, " [EXCELLENT] - Formatting & Contact Details", 0, 1, 'L', fill=True)
+        pdf.set_font('Arial', '', 10)
+        pdf.set_text_color(40, 40, 40)
+        pdf.multi_cell(180, 5.5, "Sangat baik. Detail kontak berhasil diekstrak dan panjang halaman memenuhi standar optimal.", fill=True)
+    pdf.ln(8)
+
+    # --- 4. RECOMMENDED ACTION PLAN ---
+    safe_page_break(40)
+    pdf.set_font('Arial', 'B', 11)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(180, 6, "NEXT STEPS (Tindak Lanjut):", 0, 1, 'L')
+    pdf.set_font('Arial', '', 10)
+    pdf.set_text_color(60, 60, 60)
+    pdf.multi_cell(180, 5, "1. Perbaiki temuan yang berstatus 'Action Needed' atau 'Warning' di atas.\n2. Pastikan CV Anda disimpan murni dalam format PDF standar (bukan gambar/scan yang diubah ke PDF).\n3. Lihat lampiran 'X-Ray Vision' di halaman berikutnya untuk memastikan tidak ada teks yang menempel/hilang.")
+
+    # --- HALAMAN LAMPIRAN: X-RAY VISION ---
     pdf.add_page() 
     pdf.set_fill_color(44, 62, 80) 
     pdf.set_font('Arial', 'B', 12)
@@ -409,11 +380,20 @@ def create_pdf(report_data, raw_text, doc_name):
     return bytes(pdf.output(dest='S'))
 
 # --- UI STREAMLIT (ADMIN DASHBOARD) ---
-st.title("💼 Admin Dashboard: CV Auditor")
-st.markdown("Mesin Evaluasi Internal berdasarkan standar global **Human Capital** dan **Algoritma ATS**.")
+with st.sidebar:
+    st.markdown("<h2 style='text-align: center;'>⚙️ Admin Panel</h2>", unsafe_allow_html=True)
+    st.info("💡 **Dapur Internal Konsultan HR**\n\nSistem evaluasi komersial ini hanya dapat diakses oleh Admin. Laporan PDF yang dihasilkan bersifat **Confidential**.")
+    st.divider()
+    st.markdown("### 🚦 System Status")
+    st.markdown("🟢 **Engine:** Online & Stable\n\n🟢 **NLP Model:** Loaded\n\n🟢 **PDF Gen:** Ready")
+    st.divider()
+    st.markdown("<small>v. Enterprise 2.5.0</small>", unsafe_allow_html=True)
+
+st.title("💼 Dashboard: CV Auditor & ATS Analyzer")
+st.markdown("Platform pemrosesan **Curriculum Vitae** untuk *Generate* PDF Report Klien secara otomatis.")
 
 with st.container(border=True):
-    uploaded_file = st.file_uploader("Upload Dokumen CV Client (Format PDF)", type=["pdf"])
+    uploaded_file = st.file_uploader("Upload Dokumen CV Klien (Format PDF)", type=["pdf"])
 
 if uploaded_file:
     MAX_FILE_SIZE = 200 * 1024 * 1024 
@@ -423,24 +403,33 @@ if uploaded_file:
     else:
         with st.status("🔍 Menginisialisasi Mesin ATS...", expanded=True) as status:
             try:
+                progress_bar = st.progress(0)
+                
                 st.write("📄 Mengekstrak teks dari dokumen PDF...")
-                time.sleep(0.6) 
+                progress_bar.progress(25)
+                time.sleep(0.5) 
+                
                 with pdfplumber.open(uploaded_file) as pdf:
                     num_pages = len(pdf.pages) 
                     raw_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
                 
                 st.write("🧬 Menganalisis struktur dan anatomi CV...")
-                time.sleep(0.6)
+                progress_bar.progress(50)
+                time.sleep(0.5)
                 
                 if raw_text.strip():
                     st.write("🧮 Menghitung metrik dan Google XYZ Score...")
-                    time.sleep(0.6)
+                    progress_bar.progress(80)
+                    time.sleep(0.5)
+                    
                     res = audit_cv_final(raw_text, num_pages) 
                     nama_file_asli = uploaded_file.name.rsplit('.', 1)[0]
                     
-                    st.write("📝 Menyusun Laporan Diagnostik Client...")
-                    time.sleep(0.5)
-                    status.update(label="✅ Audit Client Selesai!", state="complete", expanded=False)
+                    st.write("📝 Menyusun Laporan Diagnostik Klien...")
+                    progress_bar.progress(100)
+                    time.sleep(0.4)
+                    
+                    status.update(label="✅ Audit Selesai! Data siap diekspor.", state="complete", expanded=False)
                     st.toast('Sistem berhasil mengaudit CV Klien!', icon='🎉') 
                     
                     st.write("") 
@@ -499,52 +488,54 @@ if uploaded_file:
 
                     # --- ROW 3: SAAS DASHBOARD TABS ---
                     st.write("")
-                    tab1, tab2, tab3 = st.tabs(["📊 Diagnostic Results", "📄 Export Report", "🛠️ X-Ray Vision"])
+                    tab1, tab2, tab3 = st.tabs(["📊 Diagnostic Overview", "📄 Export Report", "🛠️ Raw Extraction"])
                     
                     with tab1:
-                        st.markdown("### Temuan Audit & Umpan Balik")
+                        st.markdown("### Temuan Audit Internal")
                         
-                        if res['final_score'] >= 80: st.success("**Status: EXCELLENT.** Format ideal, data kuat. Probabilitas tinggi lolos mesin ATS.")
-                        elif res['final_score'] >= 50: st.warning("**Status: FAIR.** Berisiko. Strukturnya baik namun minim penggunaan kalimat ber-metrik.")
-                        else: st.error("**Status: POOR.** Risiko tinggi auto-reject. Mesin gagal membaca data atau format rusak.")
+                        with st.container(border=True):
+                            if res['final_score'] >= 80: st.success("**Status: EXCELLENT.** Format ideal, data kuat. Probabilitas tinggi lolos mesin ATS.")
+                            elif res['final_score'] >= 50: st.warning("**Status: FAIR.** Berisiko. Strukturnya baik namun minim penggunaan kalimat ber-metrik.")
+                            else: st.error("**Status: POOR.** Risiko tinggi auto-reject. Mesin gagal membaca data atau format rusak.")
                         
-                        st.divider()
-
-                        st.markdown("##### 📌 ATS Keyword Mapping")
-                        st.write("Mesin mengekstrak **Top 8 Keywords** (Kata Kunci Dominan) dari CV. Evaluasi apakah ini relevan dengan loker Klien.")
-                        if res['top_keywords']:
-                            html_keywords = " ".join([f"<span style='background-color: #e8f4f8; color: #2980b9; padding: 5px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; margin-right: 8px; border: 1px solid #b3d7ff; display: inline-block; margin-bottom: 8px;'>{k}</span>" for k in res['top_keywords']])
-                            st.markdown(html_keywords, unsafe_allow_html=True)
-                        else:
-                            st.write("*Tidak cukup kata kunci yang dapat dideteksi.*")
+                        with st.container(border=True):
+                            st.markdown("##### 📌 Top 8 ATS Keywords (Extracted)")
+                            if res['top_keywords']:
+                                html_keywords = " ".join([f"<span style='background-color: #e8f4f8; color: #2980b9; padding: 5px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; margin-right: 8px; border: 1px solid #b3d7ff; display: inline-block; margin-bottom: 8px;'>{k}</span>" for k in res['top_keywords']])
+                                st.markdown(html_keywords, unsafe_allow_html=True)
+                            else:
+                                st.write("*Tidak cukup kata kunci yang dapat dideteksi.*")
                         
-                        st.divider()
-                        
-                        if res['missing_sections']: st.error(f"**[-] Missing Sections:** ATS gagal mendeteksi bagian: {', '.join(res['missing_sections']).title()}.")
-                        else: st.info("**[+] Structure:** Sangat baik. Seluruh 4 pilar wajib telah terdeteksi.")
-                        
-                        if res['xyz_score'] < 50: st.error("**[-] Content Quality:** Kalimat pengalaman kerja pasif/kurang metrik (angka).")
-                        else: st.info(f"**[+] Content Quality:** Action Verbs & Metrik sangat baik. (Kata kerja ditemukan: *{', '.join(res['extracted_verbs']).title()}*)")
+                        with st.container(border=True):
+                            st.markdown("##### 🔎 Issue Detection")
+                            if res['missing_sections']: st.error(f"**[-] Missing Sections:** ATS gagal mendeteksi bagian: {', '.join(res['missing_sections']).title()}.")
+                            else: st.info("**[+] Structure:** Sangat baik. Seluruh 4 pilar wajib telah terdeteksi.")
+                            
+                            if res['xyz_score'] < 50: st.error("**[-] Content Quality:** Kalimat pengalaman kerja pasif/kurang metrik (angka).")
+                            else: st.info(f"**[+] Content Quality:** Action Verbs & Metrik sangat baik. (Kata kerja ditemukan: *{', '.join(res['extracted_verbs']).title()}*)")
                         
                     with tab2:
-                        st.markdown("### 📤 Client Deliverable (Unduh Laporan)")
-                        st.write("Laporan PDF ini dirancang khusus untuk diberikan kepada Klien (bersifat rahasia & profesional).")
+                        st.markdown("### 📤 Laporan PDF Klien")
+                        st.write("Sistem telah menyusun laporan PDF berstandar *Enterprise Consulting* yang siap Anda berikan kepada Klien.")
                         
                         pdf_bytes = create_pdf(res, raw_text, nama_file_asli)
                         tanggal_sekarang = datetime.now().strftime('%d-%m-%Y')
                         nama_file_download = f"{nama_file_asli}-{tanggal_sekarang}.pdf"
                         
+                        st.markdown("<br>", unsafe_allow_html=True)
                         st.download_button(
-                            label="⬇️ Download Premium PDF Report",
+                            label="⬇️ GENERATE & DOWNLOAD CLIENT REPORT",
                             data=pdf_bytes,
                             file_name=nama_file_download,
                             mime="application/pdf",
-                            type="primary"
+                            type="primary",
+                            use_container_width=True
                         )
+                        st.markdown("<br>", unsafe_allow_html=True)
                         
                     with tab3:
-                        st.markdown("### Ekstraksi Data Mentah")
-                        st.info("Jika teks di bawah berantakan atau menyatu antar kolom, sistem ATS juga akan membacanya demikian.")
+                        st.markdown("### X-Ray Vision (Admin Only)")
+                        st.info("Ini adalah tampilan mentah (*Raw Text*) yang dibaca oleh ATS. Gunakan untuk mengecek jika PDF Klien corrupt.")
                         clean_display_text = re.sub(r'\n{3,}', '\n\n', raw_text)
                         st.code(clean_display_text, language="text")
 
