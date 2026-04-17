@@ -37,8 +37,9 @@ CLICHE_WORDS = [
     'berdedikasi', 'highly motivated', 'results-driven'
 ]
 
-# --- FUNGSI EKSTRAKSI KATA KUNCI ---
+# --- FUNGSI EKSTRAKSI KATA KUNCI (Super Filtered) ---
 def get_top_keywords(text):
+    # Menyuntikkan kata "sampah" CV Bahasa Inggris & Indonesia agar Keywords murni berisi Hard Skills
     stop_words = {
         'yang', 'dan', 'di', 'dari', 'untuk', 'pada', 'dengan', 'ini', 'itu', 'sebagai', 'dalam', 
         'of', 'and', 'to', 'in', 'for', 'with', 'on', 'at', 'by', 'an', 'the', 'is', 'are', 'was', 'were', 
@@ -48,7 +49,10 @@ def get_top_keywords(text):
         'januari', 'februari', 'maret', 'april', 'mei', 'juni', 'juli', 'agustus', 'september', 'oktober', 
         'november', 'desember', 'january', 'february', 'march', 'may', 'june', 'july', 'august', 'october', 
         'december', 'pt', 'cv', 'tbk', 'tahun', 'bulan', 'hari', 'saat', 'sekarang', 'present', 'current',
-        'sampai', 'hingga', 'memiliki', 'menggunakan', 'berbagai', 'sangat', 'baik'
+        'sampai', 'hingga', 'memiliki', 'menggunakan', 'berbagai', 'sangat', 'baik',
+        'from', 'test', 'level', 'description', 'process', 'employee', 'responsibility', 'responsibilities', 
+        'project', 'projects', 'job', 'role', 'based', 'using', 'detail', 'details', 'include', 'including',
+        'ensure', 'ensuring', 'activities', 'activity'
     }
     words = re.findall(r'\b[a-z]{4,}\b', text.lower())
     filtered = [w for w in words if w not in stop_words]
@@ -141,86 +145,103 @@ class PDFReport(FPDF):
     def footer(self):
         self.set_y(-25); self.set_draw_color(189, 195, 199); self.line(15, 272, 195, 272)
         self.set_y(-22); self.set_font('Arial', 'I', 8); self.set_text_color(127, 140, 141)
-        self.cell(180, 4, 'Global Enterprise ATS Standards Audit.', 0, 1, 'C')
+        self.cell(180, 4, 'System Algorithm based on Global Enterprise ATS Standards & Google XYZ Formula.', 0, 1, 'C')
         self.set_font('Arial', 'B', 9); self.set_text_color(44, 62, 80)
-        self.cell(180, 5, 'Audit Conducted by: Dany Fendika - ATS Readiness Specialist', 0, 1, 'C')
+        self.cell(180, 5, 'Audit Conducted by: Dany Fendika - ATS Readiness Specialist & HR Data Analyst', 0, 1, 'C')
+        self.set_font('Arial', 'I', 8); self.set_text_color(127, 140, 141)
+        self.cell(180, 4, f'Page {self.page_no()}', 0, 0, 'C')
 
 def create_pdf(report_data, raw_text, doc_name):
-    pdf = PDFReport(); pdf.doc_name = doc_name; pdf.set_margins(15, 20, 15); pdf.set_auto_page_break(True, 25); pdf.add_page()
-    
+    pdf = PDFReport('P', 'mm', 'A4')
+    pdf.doc_name = doc_name 
+    pdf.set_margins(15, 20, 15) 
+    pdf.set_auto_page_break(auto=True, margin=25) 
+    pdf.add_page()
+
     def safe_page_break(required_space):
         if pdf.get_y() > (297 - 25 - required_space):
             pdf.add_page()
-
-    # Skor & Summary
+    
+    # --- 1. SCORECARD DASHBOARD ---
     pdf.set_fill_color(236, 240, 241); pdf.set_font('Arial', 'B', 12); pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 8, ' 1. OVERALL ATS READINESS SCORE', 0, 1, 'L', fill=True); pdf.ln(5)
     
     color = (39, 174, 96) if report_data['final_score'] >= 80 else (230, 126, 34) if report_data['final_score'] >= 50 else (192, 57, 43)
     pdf.set_text_color(*color); pdf.set_font('Arial', 'B', 34); pdf.cell(180, 12, f"{report_data['final_score']} / 100", 0, 1, 'C')
-    pdf.set_font('Arial', 'I', 10); pdf.set_text_color(60, 60, 60); pdf.ln(4)
-    
-    summary = "Dokumen ini dianalisis menggunakan algoritma rekrutmen terbaru. Hasil evaluasi mencakup aspek keterbacaan, kekuatan kalimat (XYZ), serta kelengkapan pilar wajib CV."
-    if report_data['final_score'] >= 80: summary += " CV Anda berada di level EXCELLENT dan sangat siap untuk melamar."
-    elif report_data['final_score'] >= 50: summary += " CV Anda berada di level FAIR. Diperlukan beberapa optimasi pada narasi sebelum disubmit ke ATS."
-    else: summary += " CV Anda berada di level POOR. Risiko tinggi gagal sistem. Diperlukan perombakan besar."
-    pdf.multi_cell(180, 5, f"Evaluator Note: {summary}"); pdf.ln(6)
+    pdf.set_font('Arial', 'B', 12)
+    status_text = "EXCELLENT" if report_data['final_score'] >= 80 else "FAIR / NEEDS OPTIMIZATION" if report_data['final_score'] >= 50 else "POOR / HIGH RISK"
+    pdf.cell(180, 6, f"STATUS: {status_text}", 0, 1, 'C'); pdf.ln(4)
 
-    # Detailed Metrics Section
+    exec_summary = "Laporan ini menunjukkan bahwa CV Anda berada di level EXCELLENT. Struktur dan format dapat dibaca sempurna oleh mesin ATS. Anda juga memiliki kekuatan narasi metrik yang solid. Peluang dokumen Anda lolos screening otomatis sangat tinggi." if report_data['final_score'] >= 80 else "Laporan ini menunjukkan bahwa CV Anda berada di level FAIR. Mesin ATS berhasil mendeteksi format Anda, namun narasi pengalaman kerja Anda masih terlalu pasif. Anda kehilangan poin penting pada aspek kuantifikasi data." if report_data['final_score'] >= 50 else "Laporan ini menunjukkan status POOR (Risiko Tinggi). Terdapat kesalahan fatal pada format atau struktur CV Anda yang membuat mesin ATS gagal mengekstrak informasi penting. Perbaikan menyeluruh sangat direkomendasikan."
+    pdf.set_font('Arial', 'I', 10); pdf.set_text_color(60, 60, 60)
+    pdf.multi_cell(180, 5, f"Executive Summary: {exec_summary}"); pdf.ln(6)
+    
+    # --- 2. DETAILED METRICS ---
+    safe_page_break(50) 
     pdf.set_fill_color(236, 240, 241); pdf.set_font('Arial', 'B', 12); pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 8, ' 2. PERFORMANCE METRICS & ANALYSIS', 0, 1, 'L', fill=True); pdf.ln(4)
-    
-    metrics = [
-        ("A. ATS Parsability", f"{report_data['parsability_score']}%", "Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari tabel/2 kolom."),
-        ("B. Skor XYZ (Google Standard)", f"{int(report_data['xyz_score'])}%", "Standar XYZ: [Action Verb] + [Konteks] + [Metrik]. Skor 0% terjadi jika kalimat naratif pasif murni."),
-        ("C. Kuantifikasi Metrik", f"{report_data['metrics_count']} Data", "Bukti pencapaian nyata. Contoh ideal: 'Memimpin 15 staf', 'Efisiensi 20%', atau 'Budget Rp500 juta'."),
-        ("D. Estimasi Masa Kerja", f"{report_data['total_tenure']} Tahun", "Masa kerja yang berhasil dikalkulasi otomatis oleh mesin dari format riwayat kerja Anda."),
-        ("E. Format Dokumen", f"{report_data['pages']} Halaman", "Standar panjang dokumen resume profesional global adalah 1 hingga maksimal 2 halaman.")
+
+    metrics_data = [
+        ("A. ATS Parsability (Text Readability)", f"{report_data['parsability_score']}%", "Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari tabel/2 kolom."),
+        ("B. Kualitas Kalimat (Google XYZ Score)", f"{int(report_data['xyz_score'])}%", "Standar XYZ: [Action Verb] + [Konteks] + [Metrik]. Skor 0% terjadi jika kalimat naratif pasif murni."),
+        ("C. Quantifiable Metrics", f"{report_data['metrics_count']} Data Points", "Bukti pencapaian nyata. Contoh ideal: 'Memimpin 15 staf', 'Efisiensi 20%', atau 'Budget Rp500 juta'."),
+        ("D. Est. Career Tenure", f"{report_data['total_tenure']} Years", "Masa kerja yang berhasil dikalkulasi otomatis oleh mesin dari format riwayat kerja Anda."),
+        ("E. Document Format", f"{report_data['pages']} Pages", "Standar panjang dokumen resume profesional global adalah 1 hingga maksimal 2 halaman.")
     ]
-    for t, v, note in metrics:
+
+    for title, score, note in metrics_data:
         pdf.set_font('Arial', 'B', 10); pdf.set_text_color(44, 62, 80)
-        pdf.cell(140, 6, t, 0, 0); pdf.cell(40, 6, v, 0, 1, 'R')
+        pdf.cell(130, 5, title, 0, 0, 'L'); pdf.cell(50, 5, score, 0, 1, 'R')
         pdf.set_font('Arial', 'I', 9); pdf.set_text_color(127, 140, 141)
         pdf.multi_cell(180, 4.5, f"Note: {note}")
-        pdf.set_draw_color(240, 240, 240); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(2)
+        pdf.set_draw_color(240, 240, 240); pdf.line(15, pdf.get_y()+1, 195, pdf.get_y()+1); pdf.ln(3)
 
-    # Diagnostic Card Design
-    safe_page_break(50)
+    # --- 3. DIAGNOSTIC RESULTS ---
+    safe_page_break(40)
     pdf.ln(2); pdf.set_fill_color(236, 240, 241); pdf.set_font('Arial', 'B', 12); pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & EXPERT INSIGHTS', 0, 1, 'L', fill=True); pdf.ln(4)
     
-    # 3.1 Content Quality & XYZ Impact
-    safe_page_break(35)
+    # 3.1 Content Quality & XYZ Impact (DIAMANKAN DENGAN LOCK KOORDINAT X)
+    # Memperbesar safe_page_break menjadi 45 agar "Before-After" tidak terpotong ke halaman baru
+    safe_page_break(45)
     is_content_ok = report_data['xyz_score'] >= 50
     bg = (234, 250, 241) if is_content_ok else (253, 237, 236)
     text_c = (39, 174, 96) if is_content_ok else (192, 57, 43)
     status_tag = "[EXCELLENT]" if is_content_ok else "[ACTION NEEDED]"
     
+    # FIX BUG PDF: Memaksa set_x(15) di setiap baris agar text tidak melompat ke margin kanan!
     pdf.set_fill_color(*bg); pdf.set_text_color(*text_c); pdf.set_font('Arial', 'B', 10)
-    pdf.cell(180, 6, f" {status_tag} - Content Quality & Impact", 0, 1, fill=True)
+    pdf.set_x(15)
+    pdf.cell(180, 6, f" {status_tag} - Content Quality & Impact", 0, 1, 'L', fill=True)
     pdf.set_text_color(40, 40, 40); pdf.set_font('Arial', '', 10)
     
     if is_content_ok:
+        pdf.set_x(15)
         pdf.multi_cell(180, 5.5, "Penggunaan Action Verbs dan metrik kuantitatif pada pengalaman kerja Anda sudah sangat tangguh.", fill=True)
     else:
-        # PERBAIKAN PDF BUG: Menggunakan full multi_cell tanpa spasi kosong (indent) di awal teks agar FPDF tidak error baca koordinat
+        pdf.set_x(15)
         pdf.multi_cell(180, 5.5, "Kalimat pengalaman kerja kurang berdampak. Gunakan format Action Verb + Konteks + Metrik (Angka).", fill=True)
         pdf.set_font('Arial', 'B', 9); pdf.set_text_color(41, 128, 185)
-        pdf.multi_cell(180, 5, ">> CONSULTANT ADVICE (Contoh Perbaikan):", fill=True)
+        pdf.set_x(15)
+        pdf.cell(180, 5, " >> CONSULTANT ADVICE (Contoh Perbaikan):", 0, 1, 'L', fill=True)
         pdf.set_font('Arial', 'I', 9); pdf.set_text_color(192, 57, 43)
-        pdf.multi_cell(180, 4.5, "[Salah] Bertanggung jawab mengurus komplain pelanggan setiap hari.", fill=True)
+        pdf.set_x(15)
+        pdf.multi_cell(180, 5, " [Salah] Bertanggung jawab mengurus komplain pelanggan setiap hari.", fill=True)
         pdf.set_text_color(39, 174, 96)
-        pdf.multi_cell(180, 4.5, "[Benar] Menyelesaikan 50+ komplain pelanggan per hari dengan tingkat kepuasan 98%.", fill=True)
-    pdf.ln(3)
+        pdf.set_x(15)
+        pdf.multi_cell(180, 5, " [Benar] Menyelesaikan 50+ komplain pelanggan per hari dengan tingkat kepuasan 98%.", fill=True)
+    pdf.ln(4)
 
     # 3.2 ATS Keyword Mapping
     safe_page_break(25)
     pdf.set_fill_color(235, 245, 251); pdf.set_text_color(41, 128, 185); pdf.set_font('Arial', 'B', 10)
+    pdf.set_x(15)
     pdf.cell(180, 6, " [INSIGHT] - Industry Keyword Extraction", 0, 1, 'L', fill=True)
     pdf.set_font('Arial', '', 10); pdf.set_text_color(40, 40, 40)
     kw_str = ", ".join(report_data['top_keywords']).title() if report_data['top_keywords'] else "Tidak terdeteksi."
+    pdf.set_x(15)
     pdf.multi_cell(180, 5.5, f"Sistem berhasil menyaring kata kunci spesifik dari CV Anda: {kw_str}. Pastikan kata kunci ini relevan dengan Loker (Job Description) yang dituju.", fill=True)
-    pdf.ln(3)
+    pdf.ln(4)
 
     # 3.3 Toxic Buzzword Detection
     safe_page_break(25)
@@ -230,28 +251,60 @@ def create_pdf(report_data, raw_text, doc_name):
     tag_cliche = "[WARNING]" if has_cliche else "[EXCELLENT]"
     
     pdf.set_fill_color(*bg_cliche); pdf.set_text_color(*txt_cliche); pdf.set_font('Arial', 'B', 10)
-    pdf.cell(180, 6, f" {tag_cliche} - Cliché & Buzzword Scanner", 0, 1, fill=True)
+    pdf.set_x(15)
+    pdf.cell(180, 6, f" {tag_cliche} - Cliché & Buzzword Scanner", 0, 1, 'L', fill=True)
     pdf.set_font('Arial', '', 10); pdf.set_text_color(40, 40, 40)
+    pdf.set_x(15)
     if has_cliche:
         cliche_str = ", ".join(report_data['cliche_words']).title()
         pdf.multi_cell(180, 5.5, f"CV Anda mengandung kata klise/pasif ({cliche_str}). Rekruter modern menganggap kata ini sebagai 'red flag'. Ganti dengan bukti spesifik/metrik.", fill=True)
     else:
         pdf.multi_cell(180, 5.5, "CV Anda bersih dari kata sifat klise (buzzwords usang). Ini menunjukkan profesionalisme tinggi.", fill=True)
-    pdf.ln(3)
+    pdf.ln(4)
 
     # 3.4 Format & Contact
     safe_page_break(25)
     missing_c = sum(v == False for v in report_data['contact_info'].values())
     if missing_c > 0 or report_data['pages'] > 2:
         pdf.set_fill_color(253, 237, 236); pdf.set_text_color(192, 57, 43); pdf.set_font('Arial', 'B', 10)
-        pdf.cell(180, 6, " [ACTION NEEDED] - Structure & Contacts", 0, 1, fill=True)
+        pdf.set_x(15)
+        pdf.cell(180, 6, " [ACTION NEEDED] - Structure & Contacts", 0, 1, 'L', fill=True)
         pdf.set_font('Arial', '', 10); pdf.set_text_color(40, 40, 40)
-        pdf.multi_cell(180, 5.5, f"Item hilang ({missing_c}/4). Pastikan Email, Phone, LinkedIn, dan Domisili tertulis dalam teks standar (hindari menempel pada icon). Batas ideal CV adalah 1-2 Halaman.", fill=True)
+        warn_text = ""
+        if missing_c > 0: warn_text += f"Item kontak kurang ({missing_c}/4 hilang). Pastikan Email, Phone, LinkedIn, & Domisili ada. "
+        if report_data['pages'] > 2: warn_text += f"Halaman CV Anda melebihi batas ideal 1-2 Halaman."
+        pdf.set_x(15)
+        pdf.multi_cell(180, 5.5, warn_text, fill=True)
     else:
         pdf.set_fill_color(234, 250, 241); pdf.set_text_color(39, 174, 96); pdf.set_font('Arial', 'B', 10)
-        pdf.cell(180, 6, " [EXCELLENT] - Structure & Contacts", 0, 1, fill=True)
+        pdf.set_x(15)
+        pdf.cell(180, 6, " [EXCELLENT] - Structure & Contacts", 0, 1, 'L', fill=True)
         pdf.set_font('Arial', '', 10); pdf.set_text_color(40, 40, 40)
+        pdf.set_x(15)
         pdf.multi_cell(180, 5.5, "Struktur dokumen, detail kontak, domisili, dan jumlah halaman memenuhi standar ATS.", fill=True)
+    pdf.ln(8)
+
+    # --- 4. RECOMMENDED ACTION PLAN ---
+    safe_page_break(40)
+    pdf.set_font('Arial', 'B', 11); pdf.set_text_color(44, 62, 80)
+    pdf.cell(180, 6, "NEXT STEPS (Tindak Lanjut):", 0, 1, 'L')
+    pdf.set_font('Arial', '', 10); pdf.set_text_color(60, 60, 60)
+    pdf.multi_cell(180, 5, "1. Perbaiki temuan yang berstatus 'Action Needed' atau 'Warning' di atas.\n2. Pastikan CV Anda disimpan murni dalam format PDF standar (bukan gambar/scan yang diubah ke PDF).\n3. Lihat lampiran 'X-Ray Vision' di halaman berikutnya untuk memastikan tidak ada teks yang menempel/hilang.")
+
+    # --- HALAMAN LAMPIRAN: X-RAY VISION ---
+    pdf.add_page() 
+    pdf.set_fill_color(44, 62, 80); pdf.set_font('Arial', 'B', 12); pdf.set_text_color(255, 255, 255) 
+    pdf.cell(180, 10, ' X-RAY VISION: RAW DATA EXTRACTION (SYSTEM VIEW)', 0, 1, 'C', fill=True); pdf.ln(6)
+
+    pdf.set_font('Arial', 'B', 9); pdf.set_text_color(192, 57, 43) 
+    xray_warning = "WARNING: Teks di bawah ini adalah tampilan MENTAH (Raw Text) bagaimana sistem ATS membaca CV Anda. Jika teks terlihat berantakan, melompat, atau menyatu tanpa spasi (biasa terjadi pada CV desain 2 kolom/tabel), maka data Anda dipastikan GAGAL tersimpan dengan baik di database HR perusahaan."
+    pdf.multi_cell(180, 5, xray_warning); pdf.ln(4)
+
+    safe_raw_text = raw_text.encode('latin-1', 'replace').decode('latin-1')
+    safe_raw_text = re.sub(r'\n{3,}', '\n\n', safe_raw_text) 
+    
+    pdf.set_font('Courier', '', 8.5); pdf.set_text_color(50, 50, 50); pdf.set_fill_color(248, 249, 249) 
+    pdf.multi_cell(180, 4.5, safe_raw_text[:3500] + ("\n\n[...TEXT TRUNCATED...]" if len(safe_raw_text) > 3500 else ""), fill=True)
 
     return bytes(pdf.output(dest='S'))
 
@@ -272,95 +325,103 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("## ⚙️ Admin Console"); st.info("Dapur Internal Reviewer CV"); st.divider()
-    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v4.0.1 Premium</small>", unsafe_allow_html=True)
+    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v4.0.5 Premium - Layout Fixed</small>", unsafe_allow_html=True)
 
 st.title("💼 CV Audit SaaS Dashboard")
 uploaded_file = st.file_uploader("Drop CV PDF Client di sini", type=["pdf"])
 
 if uploaded_file:
-    with st.status("🔍 Menganalisis Dokumen...", expanded=True) as status:
-        p = st.progress(0); time.sleep(0.3); p.progress(30)
-        with pdfplumber.open(uploaded_file) as pdf:
-            raw_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
-            num_pages = len(pdf.pages)
-        p.progress(70); res = audit_cv_final(raw_text, num_pages); p.progress(100)
-        status.update(label="✅ Audit Selesai", state="complete", expanded=False)
-        
-        # Dashboard Grid
-        missing_c = sum(v == False for v in res['contact_info'].values())
-        contact_count = 4 - missing_c
-        
-        # PERBAIKAN LOGIKA STATUS KONTAK 
-        def get_ui_meta(val, type='perc'):
-            if type == 'perc': 
-                if val >= 80: return "SANGAT BAIK", "st-good", "#22c55e"
-                if val >= 50: return "BUTUH PERBAIKAN", "st-warn", "#eab308"
-                return "KRITIS", "st-crit", "#ef4444"
-            elif type == 'contact':
-                if val == 4: return "LENGKAP", "st-good", "100%"
-                if val == 3: return "CUKUP", "st-warn", "75%"
-                if val == 2: return "MINIM", "st-warn", "50%"
-                return "KRITIS", "st-crit", "25%"
-            return "", "", ""
+    MAX_FILE_SIZE = 200 * 1024 * 1024 
+    if uploaded_file.size > MAX_FILE_SIZE:
+        st.error("⚠️ Ukuran file terlalu besar! Batas maksimal ukuran dokumen CV adalah 200MB.")
+    else:
+        with st.status("🔍 Menganalisis Dokumen...", expanded=True) as status:
+            try:
+                p = st.progress(0); time.sleep(0.3); p.progress(30)
+                with pdfplumber.open(uploaded_file) as pdf:
+                    raw_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
+                    num_pages = len(pdf.pages)
+                p.progress(70); res = audit_cv_final(raw_text, num_pages); p.progress(100)
+                status.update(label="✅ Audit Selesai", state="complete", expanded=False)
+                
+                # --- UPDATE STATUS LOGIC KONTAK (Presisi) ---
+                missing_c = sum(v == False for v in res['contact_info'].values())
+                contact_count = 4 - missing_c
+                
+                def get_ui_meta(val, type='perc'):
+                    if type == 'perc': 
+                        if val >= 80: return "SANGAT BAIK", "st-good", "#22c55e"
+                        if val >= 50: return "BUTUH PERBAIKAN", "st-warn", "#eab308"
+                        return "KRITIS", "st-crit", "#ef4444"
+                    elif type == 'contact':
+                        if val == 4: return "LENGKAP", "st-good", "100%"
+                        if val == 3: return "CUKUP", "st-warn", "75%"
+                        if val == 2: return "MINIM", "st-warn", "50%"
+                        return "KRITIS", "st-crit", "25%"
+                    return "", "", ""
 
-        st.markdown(f"""
-        <div class="metric-grid">
-            <div class="m-card">
-                <div class="m-title">📖 Keterbacaan</div>
-                <div class="m-val">{res['parsability_score']}%</div>
-                <div class="m-status {get_ui_meta(res['parsability_score'])[1]}">{get_ui_meta(res['parsability_score'])[0]}</div>
-                <div class="p-bar-bg"><div class="p-bar-fill" style="width:{res['parsability_score']}%; background:{get_ui_meta(res['parsability_score'])[2]}"></div></div>
-            </div>
-            <div class="m-card">
-                <div class="m-title">⚡ Skor XYZ</div>
-                <div class="m-val">{int(res['xyz_score'])}%</div>
-                <div class="m-status {get_ui_meta(res['xyz_score'])[1]}">{get_ui_meta(res['xyz_score'])[0]}</div>
-                <div class="p-bar-bg"><div class="p-bar-fill" style="width:{res['xyz_score']}%; background:{get_ui_meta(res['xyz_score'])[2]}"></div></div>
-            </div>
-            <div class="m-card">
-                <div class="m-title">📞 Kontak & Domisili</div>
-                <div class="m-val">{contact_count}/4</div>
-                <div class="m-status {get_ui_meta(contact_count, 'contact')[1]}">{get_ui_meta(contact_count, 'contact')[0]}</div>
-                <div class="p-bar-bg"><div class="p-bar-fill" style="width:{get_ui_meta(contact_count, 'contact')[2]}; background:{'#22c55e' if contact_count==4 else ('#ef4444' if contact_count<=1 else '#eab308')}"></div></div>
-            </div>
-            <div class="m-card">
-                <div class="m-title">⏳ Masa Kerja</div>
-                <div class="m-val">{res['total_tenure']} Thn</div>
-                <div class="m-status st-good">VERIFIED</div>
-                <div class="p-bar-bg"><div class="p-bar-fill" style="width:100%; background:#2980b9"></div></div>
-            </div>
-            <div class="m-card">
-                <div class="m-title">📄 Halaman</div>
-                <div class="m-val">{res['pages']} Hal</div>
-                <div class="m-status {'st-good' if res['pages']<=2 else 'st-crit'}">{'IDEAL' if res['pages']<=2 else 'OVERLIMIT'}</div>
-                <div class="p-bar-bg"><div class="p-bar-fill" style="width:{'100%' if res['pages']<=2 else '40%'}; background:{'#22c55e' if res['pages']<=2 else '#ef4444'}"></div></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="metric-grid">
+                    <div class="m-card">
+                        <div class="m-title">📖 Keterbacaan</div>
+                        <div class="m-val">{res['parsability_score']}%</div>
+                        <div class="m-status {get_ui_meta(res['parsability_score'])[1]}">{get_ui_meta(res['parsability_score'])[0]}</div>
+                        <div class="p-bar-bg"><div class="p-bar-fill" style="width:{res['parsability_score']}%; background:{get_ui_meta(res['parsability_score'])[2]}"></div></div>
+                    </div>
+                    <div class="m-card">
+                        <div class="m-title">⚡ Skor XYZ</div>
+                        <div class="m-val">{int(res['xyz_score'])}%</div>
+                        <div class="m-status {get_ui_meta(res['xyz_score'])[1]}">{get_ui_meta(res['xyz_score'])[0]}</div>
+                        <div class="p-bar-bg"><div class="p-bar-fill" style="width:{res['xyz_score']}%; background:{get_ui_meta(res['xyz_score'])[2]}"></div></div>
+                    </div>
+                    <div class="m-card">
+                        <div class="m-title">📞 Kontak & Domisili</div>
+                        <div class="m-val">{contact_count}/4</div>
+                        <div class="m-status {get_ui_meta(contact_count, 'contact')[1]}">{get_ui_meta(contact_count, 'contact')[0]}</div>
+                        <div class="p-bar-bg"><div class="p-bar-fill" style="width:{get_ui_meta(contact_count, 'contact')[2]}; background:{'#22c55e' if contact_count==4 else ('#ef4444' if contact_count<=1 else '#eab308')}"></div></div>
+                    </div>
+                    <div class="m-card">
+                        <div class="m-title">⏳ Masa Kerja</div>
+                        <div class="m-val">{res['total_tenure']} Thn</div>
+                        <div class="m-status st-good">VERIFIED</div>
+                        <div class="p-bar-bg"><div class="p-bar-fill" style="width:100%; background:#2980b9"></div></div>
+                    </div>
+                    <div class="m-card">
+                        <div class="m-title">📄 Halaman</div>
+                        <div class="m-val">{res['pages']} Hal</div>
+                        <div class="m-status {'st-good' if res['pages']<=2 else 'st-crit'}">{'IDEAL' if res['pages']<=2 else 'OVERLIMIT'}</div>
+                        <div class="p-bar-bg"><div class="p-bar-fill" style="width:{'100%' if res['pages']<=2 else '40%'}; background:{'#22c55e' if res['pages']<=2 else '#ef4444'}"></div></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-        tab1, tab2, tab3 = st.tabs(["📊 Diagnostic Overview", "📤 Export PDF", "🛠️ Raw Text"])
-        with tab1:
-            st.markdown("### Executive Insights")
-            col1, col2 = st.columns(2)
-            with col1:
-                with st.container(border=True):
-                    st.markdown("##### 📌 Extracted Industry Keywords")
-                    if res['top_keywords']:
-                        st.markdown(" ".join([f"<span style='background-color: #e8f4f8; color: #2980b9; padding: 4px 12px; border-radius: 15px; font-size: 13px; font-weight: bold; border: 1px solid #b3d7ff; display: inline-block; margin-right: 5px; margin-bottom: 5px;'>{k}</span>" for k in res['top_keywords']]), unsafe_allow_html=True)
-                    else: st.write("*Tidak cukup data.*")
-            with col2:
-                with st.container(border=True):
-                    st.markdown("##### ⚠️ Cliché Buzzword Detection")
-                    if res['cliche_words']:
-                        st.error(f"Terdeteksi kata usang: **{', '.join(res['cliche_words']).title()}**")
-                    else: st.success("CV bersih dari kata sifat klise/pasif.")
+                tab1, tab2, tab3 = st.tabs(["📊 Diagnostic Overview", "📤 Export PDF", "🛠️ Raw Text"])
+                with tab1:
+                    st.markdown("### Executive Insights")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        with st.container(border=True):
+                            st.markdown("##### 📌 Extracted Industry Keywords")
+                            if res['top_keywords']:
+                                st.markdown(" ".join([f"<span style='background-color: #e8f4f8; color: #2980b9; padding: 4px 12px; border-radius: 15px; font-size: 13px; font-weight: bold; border: 1px solid #b3d7ff; display: inline-block; margin-right: 5px; margin-bottom: 5px;'>{k}</span>" for k in res['top_keywords']]), unsafe_allow_html=True)
+                            else: st.write("*Tidak cukup data.*")
+                    with col2:
+                        with st.container(border=True):
+                            st.markdown("##### ⚠️ Cliché Buzzword Detection")
+                            if res['cliche_words']:
+                                st.error(f"Terdeteksi kata usang: **{', '.join(res['cliche_words']).title()}**")
+                            else: st.success("CV bersih dari kata sifat klise/pasif.")
 
-            with st.container(border=True):
-                st.markdown("##### 💡 Reviewer Notes")
-                if res['xyz_score'] < 50: st.error("**Kualitas Konten:** Rendah. Rekomendasikan Klien untuk ubah format naratif ke 'Action Verb + Konteks + Angka'.")
-                else: st.info("**Kualitas Konten:** Kuat. Klien sudah menggunakan metrik kuantitatif dengan baik.")
+                    with st.container(border=True):
+                        st.markdown("##### 💡 Reviewer Notes")
+                        if res['xyz_score'] < 50: st.error("**Kualitas Konten:** Rendah. Rekomendasikan Klien untuk ubah format naratif ke 'Action Verb + Konteks + Angka'.")
+                        else: st.info("**Kualitas Konten:** Kuat. Klien sudah menggunakan metrik kuantitatif dengan baik.")
 
-        with tab2:
-            pdf_bytes = create_pdf(res, raw_text, uploaded_file.name.split('.')[0])
-            st.download_button("⬇️ DOWNLOAD PREMIUM REPORT", pdf_bytes, f"Audit_{uploaded_file.name}", "application/pdf", type="primary", use_container_width=True)
-        with tab3: st.code(raw_text)
+                with tab2:
+                    pdf_bytes = create_pdf(res, raw_text, uploaded_file.name.split('.')[0])
+                    st.download_button("⬇️ DOWNLOAD PREMIUM REPORT", pdf_bytes, f"Audit_{uploaded_file.name}", "application/pdf", type="primary", use_container_width=True)
+                with tab3: st.code(raw_text)
+
+            except Exception as e:
+                status.update(label="❌ Terjadi Kesalahan", state="error", expanded=True)
+                st.error("⚠️ Sistem gagal membaca dokumen.")
