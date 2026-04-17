@@ -108,15 +108,20 @@ def audit_cv_final(text, num_pages):
     # 4. Page Length
     report['pages'] = num_pages
 
-    # 5. Contact Info Parsing
+    # 5. Contact Info & Location Parsing (IMPROVED)
     email_found = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', text)
     phone_found = re.search(r'(\+?([0-9]{1,3})?[ \-\.]?)?(\(0?[0-9]{2,4}\)|0?[0-9]{2,4})[ \-\.]?[0-9]{3,4}[ \-\.]?[0-9]{3,4}', text)
     linkedin_found = re.search(r'linkedin\.com/in/[a-zA-Z0-9_-]+', text_clean)
     
+    # Deteksi Alamat/Kota (Domisili)
+    location_pattern = r'\b(jakarta|bogor|depok|tangerang|bekasi|bandung|surabaya|semarang|medan|makassar|yogyakarta|sleman|bantul|bali|denpasar|kota\s+\w+|kab\.\s+\w+|kabupaten\s+\w+|kecamatan\s+\w+|provinsi\s+\w+|jl\.?|jalan\s+)\b'
+    location_found = re.search(location_pattern, text_clean)
+    
     report['contact_info'] = {
         'Email': bool(email_found),
-        'Phone': bool(phone_found),
-        'LinkedIn': bool(linkedin_found)
+        'Telepon': bool(phone_found),
+        'LinkedIn': bool(linkedin_found),
+        'Domisili': bool(location_found) # Menambah komponen Domisili
     }
 
     # Final Score Weighting
@@ -129,7 +134,8 @@ def audit_cv_final(text, num_pages):
     
     if report['pages'] > 2:
         final_score -= 10  
-    if not report['contact_info']['Email'] or not report['contact_info']['Phone']:
+    # Penalti keras tetap hanya berlaku jika Email atau Telepon tidak ada
+    if not report['contact_info']['Email'] or not report['contact_info']['Telepon']:
         final_score -= 15  
         
     report['final_score'] = min(max(round(final_score, 1), 0), 100)
@@ -331,7 +337,7 @@ def create_pdf(report_data, raw_text, doc_name):
         pdf.cell(180, 6, " [EXCELLENT] - Formatting & Contact Details", 0, 1, 'L', fill=True)
         pdf.set_font('Arial', '', 10)
         pdf.set_text_color(40, 40, 40)
-        pdf.multi_cell(180, 5.5, "Sangat baik. Detail kontak berhasil diekstrak dan panjang halaman memenuhi standar optimal.", fill=True)
+        pdf.multi_cell(180, 5.5, "Sangat baik. Detail kontak dan domisili berhasil diekstrak serta panjang halaman memenuhi standar optimal.", fill=True)
     pdf.ln(8)
 
     # --- 4. RECOMMENDED ACTION PLAN ---
@@ -379,7 +385,7 @@ with st.sidebar:
     st.markdown("### 🚦 System Status")
     st.markdown("🟢 **Engine:** Online & Stable\n\n🟢 **NLP Model:** Loaded\n\n🟢 **PDF Gen:** Ready")
     st.divider()
-    st.markdown("<small>v. Enterprise 3.0</small>", unsafe_allow_html=True)
+    st.markdown("<small>v. Enterprise 3.5.0</small>", unsafe_allow_html=True)
 
 st.title("💼 Dashboard: CV Auditor & ATS Analyzer")
 st.markdown("Platform pemrosesan **Curriculum Vitae** untuk *Generate* PDF Report Klien secara otomatis.")
@@ -453,7 +459,8 @@ if uploaded_file:
                         with st.container(border=True):
                             st.markdown("<h4 style='text-align: center; color: #2C3E50;'>CV Anatomy Balance</h4>", unsafe_allow_html=True)
                             missing_c_count = sum(value == False for value in res['contact_info'].values())
-                            contact_format_score = ((3 - missing_c_count) / 3 * 50) + (50 if res['pages'] <= 2 else 0)
+                            # Update skor radar kontak karena kini ada 4 item
+                            contact_format_score = ((4 - missing_c_count) / 4 * 50) + (50 if res['pages'] <= 2 else 0)
                             
                             fig_radar = go.Figure(data=go.Scatterpolar(
                               r=[res['parsability_score'], res['section_score'], res['xyz_score'], contact_format_score],
@@ -468,51 +475,61 @@ if uploaded_file:
                             )
                             st.plotly_chart(fig_radar, use_container_width=True)
 
-                    # --- ROW 2: SCORECARDS (UI PREMIUM SAAS) ---
+                    # --- ROW 2: SCORECARDS DENGAN CUSTOM CSS GRID (ANTI-TERPOTONG) ---
                     st.markdown("""
                         <style>
+                        .metric-grid {
+                            display: grid;
+                            /* CSS Grid cerdas yang otomatis menyesuaikan ukuran layar */
+                            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+                            gap: 12px;
+                            margin-bottom: 20px;
+                        }
                         .metric-card {
-                            flex: 1;
-                            min-width: 120px;
-                            background-color: var(--secondary-background-color);
-                            padding: 20px 15px;
-                            border-radius: 12px;
-                            border: 1px solid rgba(128, 128, 128, 0.2);
+                            background-color: #ffffff;
+                            padding: 15px 10px;
+                            border-radius: 10px;
+                            border: 1px solid #e0e0e0;
                             text-align: center;
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-                            transition: transform 0.2s ease, box-shadow 0.2s ease;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                            transition: all 0.3s ease;
                         }
                         .metric-card:hover {
-                            transform: translateY(-4px);
-                            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+                            transform: translateY(-3px);
+                            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+                            border-color: #2980b9;
                         }
                         .metric-title {
-                            margin: 0;
-                            font-size: 0.95rem;
-                            color: var(--text-color);
-                            opacity: 0.8;
+                            margin: 0 0 8px 0;
+                            font-size: 0.85rem;
+                            color: #7f8c8d;
                             font-weight: 600;
-                            white-space: normal;
-                            word-wrap: break-word;
+                            /* Memaksa judul tetap satu baris agar rapi */
+                            white-space: nowrap; 
+                            overflow: hidden;
+                            text-overflow: ellipsis;
                         }
                         .metric-value {
-                            margin: 10px 0 0 0;
-                            color: #2980b9; 
-                            font-size: 1.8rem;
+                            margin: 0;
+                            color: #2c3e50; 
+                            font-size: 1.5rem;
                             font-weight: 800;
                         }
-                        .metric-container {
-                            display: flex;
-                            justify-content: space-between;
-                            gap: 15px;
-                            flex-wrap: wrap;
-                            margin-bottom: 1rem;
+                        /* Dark mode support otomatis Streamlit */
+                        @media (prefers-color-scheme: dark) {
+                            .metric-card {
+                                background-color: #1e1e1e;
+                                border-color: #333;
+                            }
+                            .metric-title { color: #aaa; }
+                            .metric-value { color: #fff; }
                         }
                         </style>
                     """, unsafe_allow_html=True)
 
+                    # Memasukkan nilai metrik ke dalam Grid HTML
                     metrics_html = f"""
-                    <div class="metric-container">
+                    <div class="metric-grid">
                         <div class="metric-card">
                             <p class="metric-title">📖 Keterbacaan</p>
                             <h3 class="metric-value">{res['parsability_score']}%</h3>
@@ -523,11 +540,11 @@ if uploaded_file:
                         </div>
                         <div class="metric-card">
                             <p class="metric-title">📞 Kontak</p>
-                            <h3 class="metric-value">{3 - missing_c_count}/3</h3>
+                            <h3 class="metric-value">{4 - missing_c_count}/4</h3>
                         </div>
                         <div class="metric-card">
                             <p class="metric-title">⏳ Masa Kerja</p>
-                            <h3 class="metric-value">±{res['total_tenure']} Thn</h3>
+                            <h3 class="metric-value">{res['total_tenure']} Thn</h3>
                         </div>
                         <div class="metric-card">
                             <p class="metric-title">📄 Halaman</p>
@@ -538,7 +555,6 @@ if uploaded_file:
                     st.markdown(metrics_html, unsafe_allow_html=True)
 
                     # --- ROW 3: SAAS DASHBOARD TABS ---
-                    st.write("")
                     tab1, tab2, tab3 = st.tabs(["📊 Diagnostic Overview", "📄 Export Report", "🛠️ Raw Extraction"])
                     
                     with tab1:
