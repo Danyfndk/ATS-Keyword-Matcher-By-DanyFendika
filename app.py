@@ -39,7 +39,6 @@ def get_top_keywords(text):
 
 # --- FUNGSI UTAMA AUDITOR ---
 def calculate_tenure(text):
-    # Regex yang sudah disempurnakan untuk membaca format penanggalan CV Indonesia
     year_patterns = re.findall(r'(\b20\d{2}\b).{1,20}?(\b20\d{2}\b|present|now|current|saat\s*ini|sekarang)', text.lower())
     total_years = 0
     current_year = datetime.now().year
@@ -141,7 +140,6 @@ def audit_cv_final(text, num_pages):
 # --- FUNGSI GENERATOR PDF (PREMIUM CONSULTING LAYOUT) ---
 class PDFReport(FPDF):
     def header(self):
-        # Premium Confidential Tag
         self.set_font('Arial', 'B', 8)
         self.set_text_color(192, 57, 43) 
         self.cell(180, 4, 'CONFIDENTIAL REPORT - FOR CANDIDATE EVALUATION ONLY', 0, 1, 'C')
@@ -218,7 +216,6 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.cell(180, 6, f"STATUS: {status_text}", 0, 1, 'C')
     pdf.ln(4)
 
-    # Executive Summary (Nilai Jual Consulting)
     pdf.set_font('Arial', 'I', 10)
     pdf.set_text_color(60, 60, 60)
     pdf.multi_cell(180, 5, f"Executive Summary: {exec_summary}")
@@ -232,7 +229,6 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.cell(180, 8, ' 2. PERFORMANCE METRICS & ANALYSIS', 0, 1, 'L', fill=True)
     pdf.ln(4)
 
-    # Metrik dipecah menjadi desain garis bawah yang elegan
     metrics_data = [
         ("A. ATS Parsability (Text Readability)", f"{report_data['parsability_score']}%", "Semakin tinggi skor, semakin aman CV dari risiko 'rusak' saat diekstrak ATS. Hindari tabel/2 kolom."),
         ("B. Kualitas Kalimat (Google XYZ Score)", f"{int(report_data['xyz_score'])}%", "Standar XYZ: [Action Verb] + [Konteks] + [Metrik]. Skor 0% terjadi jika kalimat naratif pasif murni."),
@@ -255,7 +251,7 @@ def create_pdf(report_data, raw_text, doc_name):
 
     pdf.ln(4)
 
-    # --- 3. DIAGNOSTIC RESULTS (CARD UI DESIGN) ---
+    # --- 3. DIAGNOSTIC RESULTS ---
     safe_page_break(40)
     pdf.set_fill_color(236, 240, 241)
     pdf.set_font('Arial', 'B', 12)
@@ -263,10 +259,9 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & FEEDBACK', 0, 1, 'L', fill=True)
     pdf.ln(4)
     
-    # [1] Pilar Struktur
     safe_page_break(25)
     if report_data['missing_sections']:
-        pdf.set_fill_color(253, 237, 236) # Soft Red Background
+        pdf.set_fill_color(253, 237, 236) 
         pdf.set_text_color(192, 57, 43) 
         pdf.set_font('Arial', 'B', 10)
         pdf.cell(180, 6, " [ACTION NEEDED] - Document Structure", 0, 1, 'L', fill=True)
@@ -274,7 +269,7 @@ def create_pdf(report_data, raw_text, doc_name):
         pdf.set_text_color(40, 40, 40)
         pdf.multi_cell(180, 5.5, f"ATS gagal mendeteksi bagian: {', '.join(report_data['missing_sections']).title()}. Standar global mewajibkan 4 pilar utama: Summary, Experience, Education, dan Skills.", fill=True)
     else:
-        pdf.set_fill_color(234, 250, 241) # Soft Green Background
+        pdf.set_fill_color(234, 250, 241) 
         pdf.set_text_color(39, 174, 96) 
         pdf.set_font('Arial', 'B', 10)
         pdf.cell(180, 6, " [EXCELLENT] - Document Structure", 0, 1, 'L', fill=True)
@@ -283,7 +278,6 @@ def create_pdf(report_data, raw_text, doc_name):
         pdf.multi_cell(180, 5.5, "Sangat baik. Seluruh 4 pilar wajib (Summary, Experience, Education, Skills) telah terdeteksi sempurna oleh sistem.", fill=True)
     pdf.ln(4)
 
-    # [2] Kualitas Konten
     safe_page_break(25)
     verb_text = f" (Kata kerja Anda yang terdeteksi: {', '.join(report_data['extracted_verbs']).title()})" if report_data['extracted_verbs'] else ""
     if report_data['xyz_score'] < 50:
@@ -304,9 +298,8 @@ def create_pdf(report_data, raw_text, doc_name):
         pdf.multi_cell(180, 5.5, f"Penggunaan Action Verbs dan metrik kuantitatif pada pengalaman kerja sudah sangat tangguh.{verb_text}", fill=True)
     pdf.ln(4)
 
-    # [3] ATS Keyword Mapping (Insight Eksklusif)
     safe_page_break(25)
-    pdf.set_fill_color(235, 245, 251) # Soft Blue Background
+    pdf.set_fill_color(235, 245, 251) 
     pdf.set_text_color(41, 128, 185) 
     pdf.set_font('Arial', 'B', 10)
     pdf.cell(180, 6, " [INSIGHT] - Top ATS Keyword Mapping", 0, 1, 'L', fill=True)
@@ -316,13 +309,12 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 5.5, f"Kata kunci dominan yang diekstrak mesin dari CV Anda: {kw_str}. Pastikan kata kunci ini relevan dengan kualifikasi loker incaran Anda.", fill=True)
     pdf.ln(4)
 
-    # [4] Informasi Kontak & Halaman
     safe_page_break(25)
     missing_contacts = [k for k, v in report_data['contact_info'].items() if not v]
     page_warning = f" CV Anda melebihi batas (Miliki {report_data['pages']} halaman, direkomendasikan maksimal 2)." if report_data['pages'] > 2 else ""
     
     if missing_contacts or page_warning:
-        pdf.set_fill_color(254, 245, 231) # Soft Orange
+        pdf.set_fill_color(254, 245, 231) 
         pdf.set_text_color(211, 84, 0)
         pdf.set_font('Arial', 'B', 10)
         pdf.cell(180, 6, " [WARNING] - Formatting & Contact Details", 0, 1, 'L', fill=True)
@@ -387,7 +379,7 @@ with st.sidebar:
     st.markdown("### 🚦 System Status")
     st.markdown("🟢 **Engine:** Online & Stable\n\n🟢 **NLP Model:** Loaded\n\n🟢 **PDF Gen:** Ready")
     st.divider()
-    st.markdown("<small>v. Enterprise 2.5.0</small>", unsafe_allow_html=True)
+    st.markdown("<small>v. Enterprise 3.0</small>", unsafe_allow_html=True)
 
 st.title("💼 Dashboard: CV Auditor & ATS Analyzer")
 st.markdown("Platform pemrosesan **Curriculum Vitae** untuk *Generate* PDF Report Klien secara otomatis.")
@@ -434,7 +426,6 @@ if uploaded_file:
                     
                     st.write("") 
                     
-                    # --- ROW 1: CHARTS (OVERALL & RADAR) ---
                     col_gauge, col_radar = st.columns([1, 1.2])
                     
                     with col_gauge:
@@ -477,14 +468,74 @@ if uploaded_file:
                             )
                             st.plotly_chart(fig_radar, use_container_width=True)
 
-                    # --- ROW 2: SCORECARDS (5 METRIK) ---
-                    with st.container(border=True):
-                        m1, m2, m3, m4, m5 = st.columns(5)
-                        m1.metric("Keterbacaan", f"{res['parsability_score']}%")
-                        m2.metric("Skor XYZ", f"{int(res['xyz_score'])}%")
-                        m3.metric("Kontak", f"{3 - missing_c_count}/3")
-                        m4.metric("Masa Kerja", f"±{res['total_tenure']} Thn")
-                        m5.metric("Halaman", f"{res['pages']} Hal")
+                    # --- ROW 2: SCORECARDS (UI PREMIUM SAAS) ---
+                    st.markdown("""
+                        <style>
+                        .metric-card {
+                            flex: 1;
+                            min-width: 120px;
+                            background-color: var(--secondary-background-color);
+                            padding: 20px 15px;
+                            border-radius: 12px;
+                            border: 1px solid rgba(128, 128, 128, 0.2);
+                            text-align: center;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+                            transition: transform 0.2s ease, box-shadow 0.2s ease;
+                        }
+                        .metric-card:hover {
+                            transform: translateY(-4px);
+                            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+                        }
+                        .metric-title {
+                            margin: 0;
+                            font-size: 0.95rem;
+                            color: var(--text-color);
+                            opacity: 0.8;
+                            font-weight: 600;
+                            white-space: normal;
+                            word-wrap: break-word;
+                        }
+                        .metric-value {
+                            margin: 10px 0 0 0;
+                            color: #2980b9; 
+                            font-size: 1.8rem;
+                            font-weight: 800;
+                        }
+                        .metric-container {
+                            display: flex;
+                            justify-content: space-between;
+                            gap: 15px;
+                            flex-wrap: wrap;
+                            margin-bottom: 1rem;
+                        }
+                        </style>
+                    """, unsafe_allow_html=True)
+
+                    metrics_html = f"""
+                    <div class="metric-container">
+                        <div class="metric-card">
+                            <p class="metric-title">📖 Keterbacaan</p>
+                            <h3 class="metric-value">{res['parsability_score']}%</h3>
+                        </div>
+                        <div class="metric-card">
+                            <p class="metric-title">⚡ Skor XYZ</p>
+                            <h3 class="metric-value">{int(res['xyz_score'])}%</h3>
+                        </div>
+                        <div class="metric-card">
+                            <p class="metric-title">📞 Kontak</p>
+                            <h3 class="metric-value">{3 - missing_c_count}/3</h3>
+                        </div>
+                        <div class="metric-card">
+                            <p class="metric-title">⏳ Masa Kerja</p>
+                            <h3 class="metric-value">±{res['total_tenure']} Thn</h3>
+                        </div>
+                        <div class="metric-card">
+                            <p class="metric-title">📄 Halaman</p>
+                            <h3 class="metric-value">{res['pages']} Hal</h3>
+                        </div>
+                    </div>
+                    """
+                    st.markdown(metrics_html, unsafe_allow_html=True)
 
                     # --- ROW 3: SAAS DASHBOARD TABS ---
                     st.write("")
