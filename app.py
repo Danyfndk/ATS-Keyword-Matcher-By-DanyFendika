@@ -29,7 +29,7 @@ def setup_nlp():
 
 ACTION_VERBS = setup_nlp()
 
-# KAMUS CLICHÉ & BUZZWORDS (Ide 2)
+# KAMUS CLICHÉ & BUZZWORDS
 CLICHE_WORDS = [
     'team player', 'hard worker', 'pekerja keras', 'jujur', 'disiplin', 
     'bertanggung jawab', 'fast learner', 'cepat belajar', 'detail oriented', 
@@ -37,9 +37,8 @@ CLICHE_WORDS = [
     'berdedikasi', 'highly motivated', 'results-driven'
 ]
 
-# --- FUNGSI EKSTRAKSI KATA KUNCI (Ide 3 - Dipertajam) ---
+# --- FUNGSI EKSTRAKSI KATA KUNCI ---
 def get_top_keywords(text):
-    # Menambahkan filter ekstensif untuk membuang kata umum (bulan, PT, CV, tahun) agar hanya tersisa Hard Skills / Industri
     stop_words = {
         'yang', 'dan', 'di', 'dari', 'untuk', 'pada', 'dengan', 'ini', 'itu', 'sebagai', 'dalam', 
         'of', 'and', 'to', 'in', 'for', 'with', 'on', 'at', 'by', 'an', 'the', 'is', 'are', 'was', 'were', 
@@ -103,7 +102,7 @@ def audit_cv_final(text, num_pages):
     report['total_tenure'] = calculate_tenure(text)
     report['extracted_verbs'] = list(found_action_verbs)[:8] 
 
-    # 4. Deteksi Buzzword & Klise (Ide 2)
+    # 4. Deteksi Buzzword & Klise
     found_cliches = [word for word in CLICHE_WORDS if re.search(r'\b' + re.escape(word) + r'\b', text_clean)]
     report['cliche_words'] = found_cliches
 
@@ -120,7 +119,7 @@ def audit_cv_final(text, num_pages):
     final_score = (report['parsability_score'] * 0.4) + (min(report['xyz_score'] * 1.5, 100) * 0.3) + (min(report['metrics_count'] * 10, 100) * 0.2) + (report['section_score'] * 0.1)
     if report['pages'] > 2: final_score -= 10  
     if not report['contact_info']['Email'] or not report['contact_info']['Telepon']: final_score -= 15  
-    if len(found_cliches) >= 3: final_score -= 5 # Penalti buzzword
+    if len(found_cliches) >= 3: final_score -= 5 
         
     report['final_score'] = min(max(round(final_score, 1), 0), 100)
     report['top_keywords'] = get_top_keywords(text)
@@ -190,7 +189,7 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.ln(2); pdf.set_fill_color(236, 240, 241); pdf.set_font('Arial', 'B', 12); pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & EXPERT INSIGHTS', 0, 1, 'L', fill=True); pdf.ln(4)
     
-    # 3.1 Content Quality & XYZ Impact (IDE 1 - BEFORE AFTER)
+    # 3.1 Content Quality & XYZ Impact
     safe_page_break(35)
     is_content_ok = report_data['xyz_score'] >= 50
     bg = (234, 250, 241) if is_content_ok else (253, 237, 236)
@@ -204,17 +203,17 @@ def create_pdf(report_data, raw_text, doc_name):
     if is_content_ok:
         pdf.multi_cell(180, 5.5, "Penggunaan Action Verbs dan metrik kuantitatif pada pengalaman kerja Anda sudah sangat tangguh.", fill=True)
     else:
-        # Menambahkan blok Edukasi (Before-After)
+        # PERBAIKAN PDF BUG: Menggunakan full multi_cell tanpa spasi kosong (indent) di awal teks agar FPDF tidak error baca koordinat
         pdf.multi_cell(180, 5.5, "Kalimat pengalaman kerja kurang berdampak. Gunakan format Action Verb + Konteks + Metrik (Angka).", fill=True)
         pdf.set_font('Arial', 'B', 9); pdf.set_text_color(41, 128, 185)
-        pdf.cell(180, 5, "    >> CONSULTANT ADVICE (Contoh Perbaikan):", 0, 1, fill=True)
+        pdf.multi_cell(180, 5, ">> CONSULTANT ADVICE (Contoh Perbaikan):", fill=True)
         pdf.set_font('Arial', 'I', 9); pdf.set_text_color(192, 57, 43)
-        pdf.cell(180, 4.5, "    [Salah] Bertanggung jawab mengurus komplain pelanggan setiap hari.", 0, 1, fill=True)
+        pdf.multi_cell(180, 4.5, "[Salah] Bertanggung jawab mengurus komplain pelanggan setiap hari.", fill=True)
         pdf.set_text_color(39, 174, 96)
-        pdf.multi_cell(180, 4.5, "    [Benar] Menyelesaikan 50+ komplain pelanggan per hari dengan tingkat kepuasan 98%.", fill=True)
+        pdf.multi_cell(180, 4.5, "[Benar] Menyelesaikan 50+ komplain pelanggan per hari dengan tingkat kepuasan 98%.", fill=True)
     pdf.ln(3)
 
-    # 3.2 ATS Keyword Mapping (IDE 3 - Filtered Words)
+    # 3.2 ATS Keyword Mapping
     safe_page_break(25)
     pdf.set_fill_color(235, 245, 251); pdf.set_text_color(41, 128, 185); pdf.set_font('Arial', 'B', 10)
     pdf.cell(180, 6, " [INSIGHT] - Industry Keyword Extraction", 0, 1, 'L', fill=True)
@@ -223,10 +222,10 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.multi_cell(180, 5.5, f"Sistem berhasil menyaring kata kunci spesifik dari CV Anda: {kw_str}. Pastikan kata kunci ini relevan dengan Loker (Job Description) yang dituju.", fill=True)
     pdf.ln(3)
 
-    # 3.3 Toxic Buzzword Detection (IDE 2)
+    # 3.3 Toxic Buzzword Detection
     safe_page_break(25)
     has_cliche = len(report_data['cliche_words']) > 0
-    bg_cliche = (254, 245, 231) if has_cliche else (234, 250, 241) # Orange if bad, Green if good
+    bg_cliche = (254, 245, 231) if has_cliche else (234, 250, 241) 
     txt_cliche = (211, 84, 0) if has_cliche else (39, 174, 96)
     tag_cliche = "[WARNING]" if has_cliche else "[EXCELLENT]"
     
@@ -273,7 +272,7 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("## ⚙️ Admin Console"); st.info("Dapur Internal Reviewer CV"); st.divider()
-    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v4.0.0 Consulting Edition</small>", unsafe_allow_html=True)
+    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v4.0.1 Premium</small>", unsafe_allow_html=True)
 
 st.title("💼 CV Audit SaaS Dashboard")
 uploaded_file = st.file_uploader("Drop CV PDF Client di sini", type=["pdf"])
@@ -291,6 +290,7 @@ if uploaded_file:
         missing_c = sum(v == False for v in res['contact_info'].values())
         contact_count = 4 - missing_c
         
+        # PERBAIKAN LOGIKA STATUS KONTAK 
         def get_ui_meta(val, type='perc'):
             if type == 'perc': 
                 if val >= 80: return "SANGAT BAIK", "st-good", "#22c55e"
@@ -298,8 +298,9 @@ if uploaded_file:
                 return "KRITIS", "st-crit", "#ef4444"
             elif type == 'contact':
                 if val == 4: return "LENGKAP", "st-good", "100%"
-                if val >= 2: return "MINIM", "st-warn", "50%"
-                return "RISIKO", "st-crit", "25%"
+                if val == 3: return "CUKUP", "st-warn", "75%"
+                if val == 2: return "MINIM", "st-warn", "50%"
+                return "KRITIS", "st-crit", "25%"
             return "", "", ""
 
         st.markdown(f"""
@@ -320,7 +321,7 @@ if uploaded_file:
                 <div class="m-title">📞 Kontak & Domisili</div>
                 <div class="m-val">{contact_count}/4</div>
                 <div class="m-status {get_ui_meta(contact_count, 'contact')[1]}">{get_ui_meta(contact_count, 'contact')[0]}</div>
-                <div class="p-bar-bg"><div class="p-bar-fill" style="width:{get_ui_meta(contact_count, 'contact')[2]}; background:{'#22c55e' if contact_count==4 else '#eab308'}"></div></div>
+                <div class="p-bar-bg"><div class="p-bar-fill" style="width:{get_ui_meta(contact_count, 'contact')[2]}; background:{'#22c55e' if contact_count==4 else ('#ef4444' if contact_count<=1 else '#eab308')}"></div></div>
             </div>
             <div class="m-card">
                 <div class="m-title">⏳ Masa Kerja</div>
