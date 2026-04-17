@@ -202,14 +202,12 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & EXPERT INSIGHTS', 0, 1, 'L', fill=True); pdf.ln(4)
     
     # 3.1 Content Quality & XYZ Impact (DIAMANKAN DENGAN LOCK KOORDINAT X)
-    # Memperbesar safe_page_break menjadi 45 agar "Before-After" tidak terpotong ke halaman baru
     safe_page_break(45)
     is_content_ok = report_data['xyz_score'] >= 50
     bg = (234, 250, 241) if is_content_ok else (253, 237, 236)
     text_c = (39, 174, 96) if is_content_ok else (192, 57, 43)
     status_tag = "[EXCELLENT]" if is_content_ok else "[ACTION NEEDED]"
     
-    # FIX BUG PDF: Memaksa set_x(15) di setiap baris agar text tidak melompat ke margin kanan!
     pdf.set_fill_color(*bg); pdf.set_text_color(*text_c); pdf.set_font('Arial', 'B', 10)
     pdf.set_x(15)
     pdf.cell(180, 6, f" {status_tag} - Content Quality & Impact", 0, 1, 'L', fill=True)
@@ -240,7 +238,8 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.set_font('Arial', '', 10); pdf.set_text_color(40, 40, 40)
     kw_str = ", ".join(report_data['top_keywords']).title() if report_data['top_keywords'] else "Tidak terdeteksi."
     pdf.set_x(15)
-    pdf.multi_cell(180, 5.5, f"Sistem berhasil menyaring kata kunci spesifik dari CV Anda: {kw_str}. Pastikan kata kunci ini relevan dengan Loker (Job Description) yang dituju.", fill=True)
+    # PERUBAHAN TEKS: Diperhalus menjadi lebih elegan layaknya konsultan profesional
+    pdf.multi_cell(180, 5.5, f"Sistem berhasil menyaring kata kunci spesifik dari CV Anda: {kw_str}. Sangat direkomendasikan agar sekumpulan kata kunci tersebut selaras dengan persyaratan kompetensi pada Job Description posisi yang Anda lamar.", fill=True)
     pdf.ln(4)
 
     # 3.3 Toxic Buzzword Detection
@@ -325,7 +324,7 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("## ⚙️ Admin Console"); st.info("Dapur Internal Reviewer CV"); st.divider()
-    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v4.0.5 Premium - Layout Fixed</small>", unsafe_allow_html=True)
+    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v4.0.6 Premium</small>", unsafe_allow_html=True)
 
 st.title("💼 CV Audit SaaS Dashboard")
 uploaded_file = st.file_uploader("Drop CV PDF Client di sini", type=["pdf"])
@@ -344,7 +343,6 @@ if uploaded_file:
                 p.progress(70); res = audit_cv_final(raw_text, num_pages); p.progress(100)
                 status.update(label="✅ Audit Selesai", state="complete", expanded=False)
                 
-                # --- UPDATE STATUS LOGIC KONTAK (Presisi) ---
                 missing_c = sum(v == False for v in res['contact_info'].values())
                 contact_count = 4 - missing_c
                 
