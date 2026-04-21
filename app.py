@@ -16,20 +16,43 @@ st.set_page_config(page_title="CV Auditor & ATS Analyzer (Admin)", page_icon="�
 def setup_nlp():
     nltk.download('punkt', quiet=True)
     action_verbs = [
-        # English Enterprise Verbs
-        'manage', 'managed', 'develop', 'developed', 'spearhead', 'spearheaded', 
-        'implement', 'implemented', 'analyze', 'analyzed', 'lead', 'led', 
-        'increase', 'increased', 'decrease', 'decreased', 'optimize', 'optimized', 
+        # === ENGLISH (Base, Past, Gerund & Enterprise Additions) ===
+        'manage', 'managed', 'managing', 'develop', 'developed', 'developing', 'spearhead', 'spearheaded', 
+        'implement', 'implemented', 'analyze', 'analyzed', 'lead', 'led', 'leading',
+        'increase', 'increased', 'increasing', 'decrease', 'decreased', 'optimize', 'optimized', 'optimizing',
         'create', 'created', 'design', 'designed', 'build', 'built',
-        'negotiate', 'negotiated', 'coordinate', 'coordinated', 'achieve', 'achieved', 
+        'negotiate', 'negotiated', 'coordinate', 'coordinated', 'achieve', 'achieved', 'achieving',
         'initiate', 'initiated', 'organize', 'organized', 'transform', 'transformed',
         'assist', 'assisted', 'monitor', 'monitored', 'oversee', 'oversaw', 'maintain', 'maintained',
-        'process', 'processed', 'validate', 'validated', 'curate', 'curated', 'facilitate', 'facilitated',
-        'streamline', 'streamlined', 'execute', 'executed', 'direct', 'directed', 'collaborate', 'collaborated',
-        'support', 'supported', 'prepare', 'prepared', 'resolve', 'resolved', 'ensure', 'ensured',
+        'process', 'processed', 'validate', 'validated', 'curate', 'curated', 'curating', 'facilitate', 'facilitated', 'facilitating',
+        'streamline', 'streamlined', 'streamlining', 'execute', 'executed', 'direct', 'directed', 'collaborate', 'collaborated',
+        'support', 'supported', 'prepare', 'prepared', 'resolve', 'resolved', 'ensure', 'ensured', 'ensuring',
         'participate', 'participated', 'plan', 'planned', 'review', 'reviewed', 'produce', 'produced',
-        'provide', 'provided', 'generate', 'generated', 'evaluate', 'evaluated', 'empower', 'empowered',
-        # Indonesian Enterprise Verbs
+        'provide', 'provided', 'generate', 'generated', 'evaluate', 'evaluated', 'evaluating', 'empower', 'empowered',
+        'contribute', 'contributed', 'strengthen', 'strengthened', 'deliver', 'delivered', 'enhance', 'enhanced', 'enhancing',
+        'result', 'resulted', 'resulting', 'attract', 'attracted', 'attracting', 'establish', 'established', 'establishing',
+        'expand', 'expanded', 'expanding', 'drive', 'driven', 'driving', 'track', 'tracked', 'tracking',
+        'pioneer', 'pioneered', 'champion', 'championed', 'steer', 'steered', 'delegate', 'delegated',
+        'inspire', 'inspired', 'mentor', 'mentored', 'mobilize', 'mobilized', 'align', 'aligned', 'unify', 'unified',
+        'accelerate', 'accelerated', 'boost', 'boosted', 'maximize', 'maximized', 'minimize', 'minimized',
+        'exceed', 'exceeded', 'outperform', 'outperformed', 'surpass', 'surpassed', 'attain', 'attained',
+        'amplify', 'amplified', 'engineer', 'engineered', 'architect', 'architected', 'automate', 'automated',
+        'integrate', 'integrated', 'migrate', 'migrated', 'configure', 'configured', 'debug', 'debugged',
+        'deploy', 'deployed', 'test', 'tested', 'model', 'modeled', 'forecast', 'forecasted', 'benchmark', 'benchmarked',
+        'diagnose', 'diagnosed', 'research', 'researched', 'calculate', 'calculated', 'present', 'presented',
+        'communicate', 'communicated', 'train', 'trained', 'coach', 'coached', 'advise', 'advised',
+        'consult', 'consulted', 'educate', 'educated', 'influence', 'influenced', 'advocate', 'advocated',
+        'liaise', 'liaised', 'engage', 'engaged', 'pitch', 'pitched', 'budget', 'budgeted', 'audit', 'audited',
+        'allocate', 'allocated', 'reduce', 'reduced', 'cut', 'restructure', 'restructured', 'scale', 'scaled',
+        'monetize', 'monetized', 'secure', 'secured', 'acquire', 'acquired', 'diversify', 'diversified',
+        'invest', 'invested', 'launch', 'launched', 'revamp', 'revamped', 'improve', 'improved',
+        'consolidate', 'consolidated', 'standardize', 'standardized', 'prioritize', 'prioritized',
+        'schedule', 'scheduled', 'source', 'sourced', 'procure', 'procured', 'onboard', 'onboarded',
+        'troubleshoot', 'troubleshot', 'innovate', 'innovated', 'ideate', 'ideated', 'conceptualize', 'conceptualized',
+        'prototype', 'prototyped', 'experiment', 'experimented', 'reimagine', 'reimagined', 'craft', 'crafted',
+        'formulate', 'formulated',
+
+        # === INDONESIAN (Standard & Enterprise Additions) ===
         'membangun', 'memimpin', 'mengelola', 'mengembangkan', 'meningkatkan', 'menganalisis',
         'mencapai', 'membantu', 'berkolaborasi', 'berkomunikasi', 'mengkoordinasi', 'membuat',
         'mengkurasi', 'menurunkan', 'mendesain', 'mengarahkan', 'memberdayakan', 'memastikan',
@@ -37,7 +60,18 @@ def setup_nlp():
         'mengimplementasikan', 'menginisiasi', 'memantau', 'bernegosiasi', 'mengoperasikan',
         'mengoptimalkan', 'mengatur', 'mengawasi', 'berpartisipasi', 'melakukan', 'merencanakan',
         'menyiapkan', 'memproses', 'memproduksi', 'menyediakan', 'menyelesaikan', 'meninjau',
-        'mempelopori', 'menyederhanakan', 'mendukung', 'mengubah', 'memvalidasi'
+        'mempelopori', 'menyederhanakan', 'mendukung', 'mengubah', 'memvalidasi',
+        'mendelegasikan', 'menginspirasi', 'membimbing', 'menggerakkan', 'mempercepat', 'menyatukan',
+        'menstimulasi', 'menetapkan', 'memperkuat', 'memaksimalkan', 'meminimalkan', 'melampaui',
+        'memperbesar', 'mendorong', 'merancang', 'mengotomatiskan', 'mengintegrasikan', 'memigrasikan',
+        'men-deploy', 'menguji', 'memodelkan', 'memprakirakan', 'mendiagnosis', 'meneliti', 'menghitung',
+        'mengonfigurasi', 'mempresentasikan', 'melatih', 'membina', 'menasihati', 'mengonsultasikan',
+        'mendidik', 'mempengaruhi', 'mengadvokasi', 'menghubungkan', 'melibatkan', 'mempromosikan',
+        'menganggarkan', 'mengaudit', 'mengalokasikan', 'mengurangi', 'merestrukturisasi', 'menskalakan',
+        'memonetisasi', 'mengamankan', 'mengakuisisi', 'mendiversifikasi', 'menginvestasikan',
+        'meluncurkan', 'merombak', 'memperbaiki', 'mengkonsolidasikan', 'menstandarisasi', 'memprioritaskan',
+        'menjadwalkan', 'melacak', 'mengadakan', 'memecahkan', 'mengatasi', 'berinovasi', 'memprototipi',
+        'bereksperimen', 'menciptakan', 'memformulasikan', 'mengonseptualisasikan'
     ]
     return set(action_verbs)
 
@@ -51,7 +85,7 @@ CLICHE_WORDS = [
     'berdedikasi', 'highly motivated', 'results-driven'
 ]
 
-# --- FUNGSI EKSTRAKSI KATA KUNCI (Super Filtered) ---
+# --- FUNGSI EKSTRAKSI KATA KUNCI ---
 def get_top_keywords(text):
     stop_words = {
         'yang', 'dan', 'di', 'dari', 'untuk', 'pada', 'dengan', 'ini', 'itu', 'sebagai', 'dalam', 
@@ -86,7 +120,6 @@ def calculate_tenure(text):
 
 def audit_cv_final(text, num_pages):
     text_clean = text.lower()
-    lines = text.split('\n')
     report = {}
 
     # 1. Parsability
@@ -96,34 +129,35 @@ def audit_cv_final(text, num_pages):
 
     # 2. Sections Header
     sections = {'Experience': r'\b(experience|pengalaman)\b', 'Education': r'\b(education|pendidikan)\b', 
-                'Skills': r'\b(skills|keahlian)\b', 'Summary': r'\b(summary|profile|overview)\b'}
+                'Skills': r'\b(skills|keahlian)\b', 'Summary': r'\b(summary|profile|overview|about me)\b'}
     found_sec = [s for s, p in sections.items() if re.search(p, text_clean)]
     report['section_score'] = (len(found_sec) / len(sections)) * 100
     report['missing_sections'] = [s for s in sections.keys() if s not in found_sec]
 
-    # 3. XYZ & Metrics (LOGIKA METRIK YANG DIPERBARUI)
+    # 3. XYZ & Metrics 
     valid_lines, score_per_line = 0, 0
     found_action_verbs = set()
-    
-    # Menangkap Angka+, Persentase, Nominal Uang, dll
     metric_pattern = r'(\b\d+(?:[\.,]\d+)?%|(?:Rp|IDR|USD|\$)\s*\d+(?:[\.,]\d+)*(?:\s*(?:juta|miliar|triliun|k|m|b))?|\b\d+\+|\b\d{2,}\b)'
     
-    for line in lines:
-        clean_line = line.strip().lower()
-        # Dinaikkan ke >40 karakter agar hanya mengevaluasi narasi bullet points
-        if len(clean_line) > 40: 
-            valid_lines += 1
-            words = set(re.findall(r'\b\w+\b', clean_line))
+    text_continuous = text_clean.replace('\n', ' ')
+    sentences = re.split(r'[•\▪\●\*\|]+|\.\s+', text_continuous)
+
+    for sentence in sentences:
+        clean_sentence = sentence.strip()
+        if len(clean_sentence) > 30: 
+            words = set(re.findall(r'\b\w+\b', clean_sentence))
             line_verbs = words.intersection(ACTION_VERBS)
-            found_action_verbs.update(line_verbs)
             
             has_verb = bool(line_verbs)
-            has_metric = bool(re.search(metric_pattern, clean_line, re.IGNORECASE))
+            has_metric = bool(re.search(metric_pattern, clean_sentence, re.IGNORECASE))
             
-            score_per_line += 1.0 if (has_verb and has_metric) else (0.5 if (has_verb or has_metric) else 0)
+            if has_verb or has_metric:
+                valid_lines += 1
+                found_action_verbs.update(line_verbs)
+                score_per_line += 1.0 if (has_verb and has_metric) else 0.5
                 
     report['xyz_score'] = min(max(round((score_per_line / valid_lines * 100) if valid_lines > 0 else 0, 1), 0), 100)
-    report['metrics_count'] = len(re.findall(metric_pattern, text, re.IGNORECASE))
+    report['metrics_count'] = len(re.findall(metric_pattern, text_continuous, re.IGNORECASE))
     report['total_tenure'] = calculate_tenure(text)
     report['extracted_verbs'] = list(found_action_verbs)[:8] 
 
@@ -222,7 +256,7 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.ln(2); pdf.set_fill_color(236, 240, 241); pdf.set_font('Arial', 'B', 12); pdf.set_text_color(44, 62, 80)
     pdf.cell(180, 8, ' 3. DIAGNOSTIC RESULTS & EXPERT INSIGHTS', 0, 1, 'L', fill=True); pdf.ln(4)
     
-    # 3.1 Content Quality & XYZ Impact (DIAMANKAN DENGAN LOCK KOORDINAT X)
+    # 3.1 Content Quality & XYZ Impact 
     safe_page_break(45)
     is_content_ok = report_data['xyz_score'] >= 50
     bg = (234, 250, 241) if is_content_ok else (253, 237, 236)
@@ -344,7 +378,7 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("## ⚙️ Admin Console"); st.info("Dapur Internal Reviewer CV"); st.divider()
-    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v4.0.6 Premium</small>", unsafe_allow_html=True)
+    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v5.1 Ultimate Engine</small>", unsafe_allow_html=True)
 
 st.title("💼 CV Audit SaaS Dashboard")
 uploaded_file = st.file_uploader("Drop CV PDF Client di sini", type=["pdf"])
@@ -433,7 +467,7 @@ if uploaded_file:
                     with st.container(border=True):
                         st.markdown("##### 💡 Reviewer Notes")
                         if res['xyz_score'] < 50: st.error("**Kualitas Konten:** Rendah. Rekomendasikan Klien untuk ubah format naratif ke 'Action Verb + Konteks + Angka'.")
-                        else: st.info("**Kualitas Konten:** Kuat. Klien sudah menggunakan metrik kuantitatif dengan baik.")
+                        else: st.success("**Kualitas Konten:** Kuat (Sangat Baik). Klien sudah menggunakan metrik kuantitatif dan action verb dengan baik.")
 
                 with tab2:
                     pdf_bytes = create_pdf(res, raw_text, uploaded_file.name.split('.')[0])
