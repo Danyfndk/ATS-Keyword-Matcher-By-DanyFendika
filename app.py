@@ -16,6 +16,7 @@ st.set_page_config(page_title="CV Auditor & ATS Analyzer (Admin)", page_icon="ðŸ
 def setup_nlp():
     nltk.download('punkt', quiet=True)
     action_verbs = [
+        # English Enterprise Verbs
         'manage', 'managed', 'develop', 'developed', 'spearhead', 'spearheaded', 
         'implement', 'implemented', 'analyze', 'analyzed', 'lead', 'led', 
         'increase', 'increased', 'decrease', 'decreased', 'optimize', 'optimized', 
@@ -23,7 +24,20 @@ def setup_nlp():
         'negotiate', 'negotiated', 'coordinate', 'coordinated', 'achieve', 'achieved', 
         'initiate', 'initiated', 'organize', 'organized', 'transform', 'transformed',
         'assist', 'assisted', 'monitor', 'monitored', 'oversee', 'oversaw', 'maintain', 'maintained',
-        'membangun', 'memimpin', 'mengelola', 'mengembangkan', 'meningkatkan', 'menganalisis'
+        'process', 'processed', 'validate', 'validated', 'curate', 'curated', 'facilitate', 'facilitated',
+        'streamline', 'streamlined', 'execute', 'executed', 'direct', 'directed', 'collaborate', 'collaborated',
+        'support', 'supported', 'prepare', 'prepared', 'resolve', 'resolved', 'ensure', 'ensured',
+        'participate', 'participated', 'plan', 'planned', 'review', 'reviewed', 'produce', 'produced',
+        'provide', 'provided', 'generate', 'generated', 'evaluate', 'evaluated', 'empower', 'empowered',
+        # Indonesian Enterprise Verbs
+        'membangun', 'memimpin', 'mengelola', 'mengembangkan', 'meningkatkan', 'menganalisis',
+        'mencapai', 'membantu', 'berkolaborasi', 'berkomunikasi', 'mengkoordinasi', 'membuat',
+        'mengkurasi', 'menurunkan', 'mendesain', 'mengarahkan', 'memberdayakan', 'memastikan',
+        'mendirikan', 'mengevaluasi', 'mengeksekusi', 'memfasilitasi', 'menghasilkan', 'memandu',
+        'mengimplementasikan', 'menginisiasi', 'memantau', 'bernegosiasi', 'mengoperasikan',
+        'mengoptimalkan', 'mengatur', 'mengawasi', 'berpartisipasi', 'melakukan', 'merencanakan',
+        'menyiapkan', 'memproses', 'memproduksi', 'menyediakan', 'menyelesaikan', 'meninjau',
+        'mempelopori', 'menyederhanakan', 'mendukung', 'mengubah', 'memvalidasi'
     ]
     return set(action_verbs)
 
@@ -39,7 +53,6 @@ CLICHE_WORDS = [
 
 # --- FUNGSI EKSTRAKSI KATA KUNCI (Super Filtered) ---
 def get_top_keywords(text):
-    # Menyuntikkan kata "sampah" CV Bahasa Inggris & Indonesia agar Keywords murni berisi Hard Skills
     stop_words = {
         'yang', 'dan', 'di', 'dari', 'untuk', 'pada', 'dengan', 'ini', 'itu', 'sebagai', 'dalam', 
         'of', 'and', 'to', 'in', 'for', 'with', 'on', 'at', 'by', 'an', 'the', 'is', 'are', 'was', 'were', 
@@ -88,21 +101,29 @@ def audit_cv_final(text, num_pages):
     report['section_score'] = (len(found_sec) / len(sections)) * 100
     report['missing_sections'] = [s for s in sections.keys() if s not in found_sec]
 
-    # 3. XYZ & Metrics
+    # 3. XYZ & Metrics (LOGIKA METRIK YANG DIPERBARUI)
     valid_lines, score_per_line = 0, 0
     found_action_verbs = set()
+    
+    # Menangkap Angka+, Persentase, Nominal Uang, dll
+    metric_pattern = r'(\b\d+(?:[\.,]\d+)?%|(?:Rp|IDR|USD|\$)\s*\d+(?:[\.,]\d+)*(?:\s*(?:juta|miliar|triliun|k|m|b))?|\b\d+\+|\b\d{2,}\b)'
+    
     for line in lines:
         clean_line = line.strip().lower()
-        if len(clean_line) > 30: 
+        # Dinaikkan ke >40 karakter agar hanya mengevaluasi narasi bullet points
+        if len(clean_line) > 40: 
             valid_lines += 1
             words = set(re.findall(r'\b\w+\b', clean_line))
             line_verbs = words.intersection(ACTION_VERBS)
             found_action_verbs.update(line_verbs)
-            has_verb, has_metric = bool(line_verbs), bool(re.search(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', clean_line))
+            
+            has_verb = bool(line_verbs)
+            has_metric = bool(re.search(metric_pattern, clean_line, re.IGNORECASE))
+            
             score_per_line += 1.0 if (has_verb and has_metric) else (0.5 if (has_verb or has_metric) else 0)
                 
     report['xyz_score'] = min(max(round((score_per_line / valid_lines * 100) if valid_lines > 0 else 0, 1), 0), 100)
-    report['metrics_count'] = len(re.findall(r'(\b\d+(?:[\.,]\d+)?%|\b\d{2,}\b)', text))
+    report['metrics_count'] = len(re.findall(metric_pattern, text, re.IGNORECASE))
     report['total_tenure'] = calculate_tenure(text)
     report['extracted_verbs'] = list(found_action_verbs)[:8] 
 
@@ -238,7 +259,6 @@ def create_pdf(report_data, raw_text, doc_name):
     pdf.set_font('Arial', '', 10); pdf.set_text_color(40, 40, 40)
     kw_str = ", ".join(report_data['top_keywords']).title() if report_data['top_keywords'] else "Tidak terdeteksi."
     pdf.set_x(15)
-    # PERUBAHAN TEKS: Diperhalus menjadi lebih elegan layaknya konsultan profesional
     pdf.multi_cell(180, 5.5, f"Sistem berhasil menyaring kata kunci spesifik dari CV Anda: {kw_str}. Sangat direkomendasikan agar sekumpulan kata kunci tersebut selaras dengan persyaratan kompetensi pada Job Description posisi yang Anda lamar.", fill=True)
     pdf.ln(4)
 
