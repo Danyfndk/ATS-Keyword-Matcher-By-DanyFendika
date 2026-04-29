@@ -86,8 +86,8 @@ CLICHE_WORDS = [
     'berdedikasi', 'highly motivated', 'results-driven'
 ]
 
-# --- FUNGSI EKSTRAKSI KATA KUNCI ---
-def get_top_keywords(text):
+# --- FUNGSI EKSTRAKSI KATA KUNCI (Dengan Filter Nama) ---
+def get_top_keywords(text, exclude_words=None):
     stop_words = {
         'yang', 'dan', 'di', 'dari', 'untuk', 'pada', 'dengan', 'ini', 'itu', 'sebagai', 'dalam', 
         'of', 'and', 'to', 'in', 'for', 'with', 'on', 'at', 'by', 'an', 'the', 'is', 'are', 'was', 'were', 
@@ -100,8 +100,12 @@ def get_top_keywords(text):
         'sampai', 'hingga', 'memiliki', 'menggunakan', 'berbagai', 'sangat', 'baik',
         'from', 'test', 'level', 'description', 'process', 'employee', 'responsibility', 'responsibilities', 
         'project', 'projects', 'job', 'role', 'based', 'using', 'detail', 'details', 'include', 'including',
-        'ensure', 'ensuring', 'activities', 'activity'
+        'ensure', 'ensuring', 'activities', 'activity', 'pdf', 'docx', 'doc'
     }
+    # Menambahkan kata-kata dari nama file agar tidak masuk ke Industry Keyword
+    if exclude_words:
+        stop_words.update([w.lower() for w in exclude_words])
+        
     words = re.findall(r'\b[a-z]{4,}\b', text.lower())
     filtered = [w for w in words if w not in stop_words]
     counts = Counter(filtered)
@@ -137,7 +141,7 @@ def get_valid_metrics_count(text):
         valid_count += 1
     return valid_count
 
-def audit_cv_final(text, num_pages):
+def audit_cv_final(text, num_pages, doc_name=""):
     text_clean = text.lower()
     report = {}
 
@@ -217,14 +221,21 @@ def audit_cv_final(text, num_pages):
     report['contact_info'] = {'Email': bool(email_found), 'Telepon': bool(phone_found), 'LinkedIn': bool(linkedin_found), 'Domisili': bool(loc_found)}
     report['pages'] = num_pages
 
-    # Scoring Weight
+    # Scoring Weight (Default)
     final_score = (report['parsability_score'] * 0.4) + (min(report['xyz_score'] * 1.5, 100) * 0.3) + (min(report['metrics_count'] * 10, 100) * 0.2) + (report['section_score'] * 0.1)
     if report['pages'] > 2: final_score -= 10  
     if not report['contact_info']['Email'] or not report['contact_info']['Telepon']: final_score -= 15  
     if len(found_cliches) >= 3: final_score -= 5 
         
+    # --- OPSI 2: HARD PENALTY UNTUK KONTEN (XYZ <= 50) ---
+    if report['xyz_score'] <= 50:
+        final_score -= 10 # Penalti pemotongan paksa agar skor jatuh ke FAIR/POOR
+        
     report['final_score'] = min(max(round(final_score, 1), 0), 100)
-    report['top_keywords'] = get_top_keywords(text)
+    
+    # Ekstrak kata kunci, kecualikan nama file (nama klien)
+    name_words = re.findall(r'\b[a-z]{3,}\b', doc_name.lower())
+    report['top_keywords'] = get_top_keywords(text, exclude_words=name_words)
     return report
 
 # --- FUNGSI GENERATOR PDF (PREMIUM CONSULTING LAYOUT) ---
@@ -301,7 +312,6 @@ def create_pdf(report_data, raw_text, doc_name):
     
     # 3.1 Content Quality & XYZ Impact 
     safe_page_break(45)
-    # FIX: Threshold harus > 50 agar yang hanya punya verb (skor 50) tetap dapat peringatan!
     is_content_ok = report_data['xyz_score'] > 50
     bg = (234, 250, 241) if is_content_ok else (253, 237, 236)
     text_c = (39, 174, 96) if is_content_ok else (192, 57, 43)
@@ -422,7 +432,7 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("## ⚙️ Admin Console"); st.info("Dapur Internal Reviewer CV"); st.divider()
-    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v5.2 Ultimate Engine (Filter Patch)</small>", unsafe_allow_html=True)
+    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v6.0 Enterprise Consulting Edition</small>", unsafe_allow_html=True)
 
 st.title("💼 CV Audit SaaS Dashboard")
 uploaded_file = st.file_uploader("Drop CV PDF Client di sini", type=["pdf"])
@@ -438,7 +448,9 @@ if uploaded_file:
                 with pdfplumber.open(uploaded_file) as pdf:
                     raw_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
                     num_pages = len(pdf.pages)
-                p.progress(70); res = audit_cv_final(raw_text, num_pages); p.progress(100)
+                
+                # Meneruskan nama file (uploaded_file.name) ke dalam fungsi untuk difilter
+                p.progress(70); res = audit_cv_final(raw_text, num_pages, uploaded_file.name); p.progress(100)
                 status.update(label="✅ Audit Selesai", state="complete", expanded=False)
                 
                 missing_c = sum(v == False for v in res['contact_info'].values())
@@ -510,7 +522,6 @@ if uploaded_file:
 
                     with st.container(border=True):
                         st.markdown("##### 💡 Reviewer Notes")
-                        # FIX LOGIKA: Harus di atas 50% untuk dianggap kuat/sangat baik
                         if res['xyz_score'] <= 50: st.error("**Kualitas Konten:** Rendah. Rekomendasikan Klien untuk ubah format naratif ke 'Action Verb + Konteks + Angka'.")
                         else: st.success("**Kualitas Konten:** Kuat (Sangat Baik). Klien sudah menggunakan metrik kuantitatif dan action verb dengan baik.")
 
