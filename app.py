@@ -50,7 +50,8 @@ def setup_nlp():
         'schedule', 'scheduled', 'source', 'sourced', 'procure', 'procured', 'onboard', 'onboarded',
         'troubleshoot', 'troubleshot', 'innovate', 'innovated', 'ideate', 'ideated', 'conceptualize', 'conceptualized',
         'prototype', 'prototyped', 'experiment', 'experimented', 'reimagine', 'reimagined', 'craft', 'crafted',
-        'formulate', 'formulated',
+        'formulate', 'formulated', 'perform', 'performed', 'performing', 'conduct', 'conducted', 'conducting', 
+        'operate', 'operated', 'operating',
 
         # === INDONESIAN (Standard & Enterprise Additions) ===
         'membangun', 'memimpin', 'mengelola', 'mengembangkan', 'meningkatkan', 'menganalisis',
@@ -118,6 +119,24 @@ def calculate_tenure(text):
         if 0 < diff < 40: total_years += diff
     return total_years
 
+# FUNGSI FILTER METRIK (ANTI-GHOST METRICS)
+def get_valid_metrics_count(text):
+    metric_pattern = r'(\b\d+(?:[\.,]\d+)?%|(?:Rp|IDR|USD|\$)\s*\d+(?:[\.,]\d+)*(?:\s*(?:juta|miliar|triliun|k|m|b))?|\b\d+\+|\b\d{2,}\b)'
+    matches = re.findall(metric_pattern, text, re.IGNORECASE)
+    valid_count = 0
+    for m in matches:
+        clean_m = re.sub(r'[^\d]', '', m)
+        if clean_m.isdigit():
+            # Tolak angka yang diawali nol (Telepon/ID)
+            if m.strip().startswith('0'): continue
+            val = int(clean_m)
+            # Tolak angka Tahun (1950 - 2030)
+            if 1950 <= val <= 2030 and len(clean_m) == 4: continue
+            # Tolak angka panjang (>4 digit) tanpa simbol uang/persen
+            if len(clean_m) >= 5 and not any(s in m.lower() for s in ['rp', 'idr', 'usd', '$', '%', '+', 'juta', 'miliar', 'k', 'm']): continue
+        valid_count += 1
+    return valid_count
+
 def audit_cv_final(text, num_pages):
     text_clean = text.lower()
     report = {}
@@ -134,22 +153,46 @@ def audit_cv_final(text, num_pages):
     report['section_score'] = (len(found_sec) / len(sections)) * 100
     report['missing_sections'] = [s for s in sections.keys() if s not in found_sec]
 
-    # 3. XYZ & Metrics 
+    # 3. XYZ & Metrics (DENGAN SMART SENTENCE BOUNDARY)
     valid_lines, score_per_line = 0, 0
     found_action_verbs = set()
-    metric_pattern = r'(\b\d+(?:[\.,]\d+)?%|(?:Rp|IDR|USD|\$)\s*\d+(?:[\.,]\d+)*(?:\s*(?:juta|miliar|triliun|k|m|b))?|\b\d+\+|\b\d{2,}\b)'
     
-    text_continuous = text_clean.replace('\n', ' ')
-    sentences = re.split(r'[•\▪\●\*\|]+|\.\s+', text_continuous)
+    sentences = []
+    current_sent = ""
+    for line in text.split('\n'):
+        line_str = line.strip()
+        if not line_str: continue
+        
+        first_word = re.sub(r'[^\w\s]', '', line_str.split()[0].lower()) if line_str.split() else ""
+        
+        # Logika Boundary: Kalimat baru jika ada bullet, format tanggal/tahun, ATAU kata kerja aktif
+        is_boundary = (
+            re.match(r'^[•\▪\●\*\-\|]', line_str) or 
+            re.match(r'^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|20\d{2}|19\d{2})', line_str, re.IGNORECASE) or 
+            first_word in ACTION_VERBS
+        )
+        
+        if is_boundary:
+            if current_sent: sentences.append(current_sent)
+            current_sent = line_str
+        else:
+            if current_sent: current_sent += " " + line_str
+            else: current_sent = line_str
+                
+    if current_sent: sentences.append(current_sent)
+        
+    final_sentences = []
+    for s in sentences:
+        for sub in re.split(r'\.\s+', s):
+            if sub.strip(): final_sentences.append(sub.strip().lower())
 
-    for sentence in sentences:
-        clean_sentence = sentence.strip()
-        if len(clean_sentence) > 30: 
-            words = set(re.findall(r'\b\w+\b', clean_sentence))
+    for sentence in final_sentences:
+        if len(sentence) > 40: 
+            words = set(re.findall(r'\b\w+\b', sentence))
             line_verbs = words.intersection(ACTION_VERBS)
             
             has_verb = bool(line_verbs)
-            has_metric = bool(re.search(metric_pattern, clean_sentence, re.IGNORECASE))
+            has_metric = get_valid_metrics_count(sentence) > 0
             
             if has_verb or has_metric:
                 valid_lines += 1
@@ -157,7 +200,7 @@ def audit_cv_final(text, num_pages):
                 score_per_line += 1.0 if (has_verb and has_metric) else 0.5
                 
     report['xyz_score'] = min(max(round((score_per_line / valid_lines * 100) if valid_lines > 0 else 0, 1), 0), 100)
-    report['metrics_count'] = len(re.findall(metric_pattern, text_continuous, re.IGNORECASE))
+    report['metrics_count'] = get_valid_metrics_count(text)
     report['total_tenure'] = calculate_tenure(text)
     report['extracted_verbs'] = list(found_action_verbs)[:8] 
 
@@ -258,7 +301,8 @@ def create_pdf(report_data, raw_text, doc_name):
     
     # 3.1 Content Quality & XYZ Impact 
     safe_page_break(45)
-    is_content_ok = report_data['xyz_score'] >= 50
+    # FIX: Threshold harus > 50 agar yang hanya punya verb (skor 50) tetap dapat peringatan!
+    is_content_ok = report_data['xyz_score'] > 50
     bg = (234, 250, 241) if is_content_ok else (253, 237, 236)
     text_c = (39, 174, 96) if is_content_ok else (192, 57, 43)
     status_tag = "[EXCELLENT]" if is_content_ok else "[ACTION NEEDED]"
@@ -378,7 +422,7 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("## ⚙️ Admin Console"); st.info("Dapur Internal Reviewer CV"); st.divider()
-    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v5.1 Ultimate Engine</small>", unsafe_allow_html=True)
+    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v5.2 Ultimate Engine (Filter Patch)</small>", unsafe_allow_html=True)
 
 st.title("💼 CV Audit SaaS Dashboard")
 uploaded_file = st.file_uploader("Drop CV PDF Client di sini", type=["pdf"])
@@ -466,7 +510,8 @@ if uploaded_file:
 
                     with st.container(border=True):
                         st.markdown("##### 💡 Reviewer Notes")
-                        if res['xyz_score'] < 50: st.error("**Kualitas Konten:** Rendah. Rekomendasikan Klien untuk ubah format naratif ke 'Action Verb + Konteks + Angka'.")
+                        # FIX LOGIKA: Harus di atas 50% untuk dianggap kuat/sangat baik
+                        if res['xyz_score'] <= 50: st.error("**Kualitas Konten:** Rendah. Rekomendasikan Klien untuk ubah format naratif ke 'Action Verb + Konteks + Angka'.")
                         else: st.success("**Kualitas Konten:** Kuat (Sangat Baik). Klien sudah menggunakan metrik kuantitatif dan action verb dengan baik.")
 
                 with tab2:
