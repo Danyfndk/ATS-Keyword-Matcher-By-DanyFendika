@@ -16,7 +16,7 @@ st.set_page_config(page_title="CV Auditor & ATS Analyzer (Admin)", page_icon="�
 def setup_nlp():
     nltk.download('punkt', quiet=True)
     action_verbs = [
-        # === ENGLISH (Base, Past, Gerund & Enterprise Additions) ===
+        # === ENGLISH ===
         'manage', 'managed', 'managing', 'develop', 'developed', 'developing', 'spearhead', 'spearheaded', 
         'implement', 'implemented', 'analyze', 'analyzed', 'lead', 'led', 'leading',
         'increase', 'increased', 'increasing', 'decrease', 'decreased', 'optimize', 'optimized', 'optimizing',
@@ -53,7 +53,7 @@ def setup_nlp():
         'formulate', 'formulated', 'perform', 'performed', 'performing', 'conduct', 'conducted', 'conducting', 
         'operate', 'operated', 'operating',
 
-        # === INDONESIAN (Standard & Enterprise Additions) ===
+        # === INDONESIAN ===
         'membangun', 'memimpin', 'mengelola', 'mengembangkan', 'meningkatkan', 'menganalisis',
         'mencapai', 'membantu', 'berkolaborasi', 'berkomunikasi', 'mengkoordinasi', 'membuat',
         'mengkurasi', 'menurunkan', 'mendesain', 'mengarahkan', 'memberdayakan', 'memastikan',
@@ -86,7 +86,7 @@ CLICHE_WORDS = [
     'berdedikasi', 'highly motivated', 'results-driven'
 ]
 
-# --- FUNGSI EKSTRAKSI KATA KUNCI (Dengan Filter Nama) ---
+# --- FUNGSI EKSTRAKSI KATA KUNCI ---
 def get_top_keywords(text, exclude_words=None):
     stop_words = {
         'yang', 'dan', 'di', 'dari', 'untuk', 'pada', 'dengan', 'ini', 'itu', 'sebagai', 'dalam', 
@@ -102,7 +102,6 @@ def get_top_keywords(text, exclude_words=None):
         'project', 'projects', 'job', 'role', 'based', 'using', 'detail', 'details', 'include', 'including',
         'ensure', 'ensuring', 'activities', 'activity', 'pdf', 'docx', 'doc'
     }
-    # Menambahkan kata-kata dari nama file agar tidak masuk ke Industry Keyword
     if exclude_words:
         stop_words.update([w.lower() for w in exclude_words])
         
@@ -123,20 +122,30 @@ def calculate_tenure(text):
         if 0 < diff < 40: total_years += diff
     return total_years
 
-# FUNGSI FILTER METRIK (ANTI-GHOST METRICS)
+# FUNGSI FILTER METRIK (PENGEMBANGAN ANTI-GHOST METRICS)
 def get_valid_metrics_count(text):
+    clean_text = text.lower()
+    
+    # 1. Menghapus Nomor Telepon utuh untuk mencegah fragmen 4 digit terbaca
+    clean_text = re.sub(r'\(?\+?\d{1,4}\)?[\-\s\.]?\d{3,4}[\-\s\.]?\d{3,4}', '', clean_text)
+    
+    # 2. Menghapus Kode Administrasi (No/Nomor/RT/RW) dan Kode Hukum/Pajak (PPh/Pasal) beserta angkanya
+    clean_text = re.sub(r'\b(pph|pasal|psl|no|nomor|rt|rw|kodepos)\.?\s*[\.\:\-]?\s*\d+[a-z\(\)\-\d]*\b', '', clean_text)
+    
+    # 3. Menghapus deret angka kode pajak yang terpisah koma atau berdiri sendiri (misal: 21, 23, 4(2))
+    clean_text = re.sub(r'\b(21|22|23|24|25|26|29|4\(2\))\b', '', clean_text)
+    
+    # 4. Menghapus tahun murni
+    clean_text = re.sub(r'\b(19|20)\d{2}\b', '', clean_text)
+    
     metric_pattern = r'(\b\d+(?:[\.,]\d+)?%|(?:Rp|IDR|USD|\$)\s*\d+(?:[\.,]\d+)*(?:\s*(?:juta|miliar|triliun|k|m|b))?|\b\d+\+|\b\d{2,}\b)'
-    matches = re.findall(metric_pattern, text, re.IGNORECASE)
+    matches = re.findall(metric_pattern, clean_text, re.IGNORECASE)
     valid_count = 0
     for m in matches:
         clean_m = re.sub(r'[^\d]', '', m)
         if clean_m.isdigit():
-            # Tolak angka yang diawali nol (Telepon/ID)
             if m.strip().startswith('0'): continue
             val = int(clean_m)
-            # Tolak angka Tahun (1950 - 2030)
-            if 1950 <= val <= 2030 and len(clean_m) == 4: continue
-            # Tolak angka panjang (>4 digit) tanpa simbol uang/persen
             if len(clean_m) >= 5 and not any(s in m.lower() for s in ['rp', 'idr', 'usd', '$', '%', '+', 'juta', 'miliar', 'k', 'm']): continue
         valid_count += 1
     return valid_count
@@ -151,13 +160,13 @@ def audit_cv_final(text, num_pages, doc_name=""):
     report['parsability_score'] = min(max(round(parsability, 1), 0), 100)
 
     # 2. Sections Header
-    sections = {'Experience': r'\b(experience|pengalaman)\b', 'Education': r'\b(education|pendidikan)\b', 
-                'Skills': r'\b(skills|keahlian)\b', 'Summary': r'\b(summary|profile|overview|about me)\b'}
+    sections = {'Experience': r'\b(experience|pengalaman|pengalaman kerja)\b', 'Education': r'\b(education|pendidikan)\b', 
+                'Skills': r'\b(skills|keahlian|kompetensi)\b', 'Summary': r'\b(summary|profile|profil|overview|about me)\b'}
     found_sec = [s for s, p in sections.items() if re.search(p, text_clean)]
     report['section_score'] = (len(found_sec) / len(sections)) * 100
     report['missing_sections'] = [s for s in sections.keys() if s not in found_sec]
 
-    # 3. XYZ & Metrics (DENGAN SMART SENTENCE BOUNDARY)
+    # 3. XYZ & Metrics
     valid_lines, score_per_line = 0, 0
     found_action_verbs = set()
     
@@ -169,7 +178,6 @@ def audit_cv_final(text, num_pages, doc_name=""):
         
         first_word = re.sub(r'[^\w\s]', '', line_str.split()[0].lower()) if line_str.split() else ""
         
-        # Logika Boundary: Kalimat baru jika ada bullet, format tanggal/tahun, ATAU kata kerja aktif
         is_boundary = (
             re.match(r'^[•\▪\●\*\-\|]', line_str) or 
             re.match(r'^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|20\d{2}|19\d{2})', line_str, re.IGNORECASE) or 
@@ -227,13 +235,12 @@ def audit_cv_final(text, num_pages, doc_name=""):
     if not report['contact_info']['Email'] or not report['contact_info']['Telepon']: final_score -= 15  
     if len(found_cliches) >= 3: final_score -= 5 
         
-    # --- OPSI 2: HARD PENALTY UNTUK KONTEN (XYZ <= 50) ---
+    # HARD PENALTY UNTUK KONTEN (XYZ <= 50)
     if report['xyz_score'] <= 50:
-        final_score -= 10 # Penalti pemotongan paksa agar skor jatuh ke FAIR/POOR
+        final_score -= 10 
         
     report['final_score'] = min(max(round(final_score, 1), 0), 100)
     
-    # Ekstrak kata kunci, kecualikan nama file (nama klien)
     name_words = re.findall(r'\b[a-z]{3,}\b', doc_name.lower())
     report['top_keywords'] = get_top_keywords(text, exclude_words=name_words)
     return report
@@ -432,7 +439,7 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("## ⚙️ Admin Console"); st.info("Dapur Internal Reviewer CV"); st.divider()
-    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v6.0 Enterprise Consulting Edition</small>", unsafe_allow_html=True)
+    st.markdown("### 🚦 System: **Online**"); st.divider(); st.markdown("<small>v6.1 - Accurate Metric Engine</small>", unsafe_allow_html=True)
 
 st.title("💼 CV Audit SaaS Dashboard")
 uploaded_file = st.file_uploader("Drop CV PDF Client di sini", type=["pdf"])
@@ -449,7 +456,6 @@ if uploaded_file:
                     raw_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
                     num_pages = len(pdf.pages)
                 
-                # Meneruskan nama file (uploaded_file.name) ke dalam fungsi untuk difilter
                 p.progress(70); res = audit_cv_final(raw_text, num_pages, uploaded_file.name); p.progress(100)
                 status.update(label="✅ Audit Selesai", state="complete", expanded=False)
                 
